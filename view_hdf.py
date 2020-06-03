@@ -75,8 +75,9 @@ def dist_travelled(data_prev, data_cur):
 class Guppy_Calculator():
     def __init__(self, hdf_file, agent, num_bins, num_rays):
         # set up data
-        self.ls = list(f.keys())
+        self.ls = list(hdf_file.keys())
         self.data = [hdf_file.get("{}".format(i)) for i in range(len(self.ls))]
+        self.agent = agent
         self.agent_data = numpy.array(self.data[agent])
 
         # set up axes
@@ -90,6 +91,8 @@ class Guppy_Calculator():
         # data to be calculated
         self.num_bins = num_bins
         self.num_rays = num_rays
+        self.bin_angles = [pi * (i / self.num_bins) - pi / 2 for i in range(0, self.num_bins + 1)]
+        self.wall_angles = [pi * (i / self.num_rays) - pi / 2 for i in range(0, self.num_rays)]
         self.agent_view = None
         self.wall_view = None
         self.obs_pos = None
@@ -108,33 +111,34 @@ class Guppy_Calculator():
         self.obs_angle = vec_to_angle(self.obs_ori[0], self.obs_ori[1])
         # calculate positions of other guppys
         self.others = [sympy.Point2D(self.data[j][i][0], self.data[j][i][1]) for j in
-                       range(1, len(self.ls))]
+                       range(len(self.ls)) if j != self.agent]
         # calculate intensity vector wall_view for distance to walls
         self.wall_distances()
         # calculate intensity vector agent_view for distance to nearby guppies
         self.guppy_distances()
         # loc_vec[0] = angular turn; loc_vec[1] = linear speed
         self.loc_vec = get_locomotion_vec(self.agent_data[i - 1], self.agent_data[i])
-
-        return self.loc_vec, self.agent_view, self.wall_view
+        # we return the vector already concatenated in a numpy_vector
+        return numpy.concatenate((numpy.array(self.loc_vec), numpy.array(self.agent_view), numpy.array(self.wall_view)))
 
     def run_sim(self, step):
         for frame in range(1, len(self.agent_data), step):
             self.craft_vector(frame)
             self.dist_difference = dist_travelled(self.agent_data[frame - 1], self.agent_data[frame])
-            #self.plot_guppy_bins()
-            self.plot_wall_rays() #use either of the two plot_functions, not both at once
+            self.plot_guppy_bins()
+            # self.plot_wall_rays() #use either of the two plot_functions, not both at once
 
     def guppy_distances(self):
         # get the boundaries of the bins by dividing 180 degree field of view by number of bins
         # and make a ray for each resulting angle. To adjust the rays to our angle-system, we have to subtract pi / 2
-        rays = [sympy.Ray(self.obs_pos, angle=pi * x / self.num_bins + self.obs_angle - pi / 2) for x in
-                range(0, self.num_bins + 1)]
 
         # get the intersection points of the rays with the tank walls
-        intersections = [ray.intersection(self.tank)[0] for ray in rays]
+        agent_rays = [sympy.Ray(self.obs_pos, angle=x + self.obs_angle) for x in self.bin_angles]
+        intersections = [ray.intersection(self.tank)[0] for ray in agent_rays]
 
         # construct the bins as polygons with intersection points and observer position as vertices
+        # would surely be more efficient to just use a function which checks if a point lies within a polygon defined
+        # by the three / four points given.
         self.bins = []
         for i in range(len(intersections) - 1):
             if intersections[i][0] == intersections[i + 1][0] or intersections[i][1] == intersections[i + 1][1]:
@@ -144,24 +148,51 @@ class Guppy_Calculator():
                 self.bins.append(Polygon(self.obs_pos, intersections[i], corner, intersections[i + 1]))
 
         # loop through the bins and find the closest guppy for each bin
-        self.agent_view = [1000000 for i in range(len(self.bins))]
+        self.agent_view = [1000.0 for i in range(len(self.bins))]
         length = len(self.others)
         others_c = self.others[:]
+
+        # Variant 1: Start with the bins and delete guppys which already found their bin
+        # This seems to be the most efficient
         for i in range(len(self.bins)):
             j = 0
             while j < length:
-                if self.bins[i].encloses_point(others_c[j]) and self.obs_pos.distance(others_c[j]) < self.agent_view[i]:
-                    self.agent_view[i] = float(self.obs_pos.distance(others_c[j]))
-                    del (others_c[j])  # if guppy is already in a bin, delete it
+                if self.bins[i].encloses_point(others_c[j]):
+                    distance = float(self.obs_pos.distance(others_c[j]))
+                    if distance < self.agent_view[i]:
+                        self.agent_view[i] = distance
+                    del (others_c[j])
                     length -= 1
                 else:
                     j += 1
 
-        print("closest distance for each bin:", self.agent_view)
-        # convert distances to intensities in range(0,1)
+            self.agent_view[i] = intensity_linear(self.agent_view[i], max_dist)
+
+        # agent_view vector is ready now
+        """
+        Variant 2: start the loop with the guppys and break if you found its bin
+        for guppy in self.others:
+            for i in range(len(self.bins)):
+                if self.bins[i].encloses_point(guppy):
+                    distance = float(self.obs_pos.distance(guppy))
+                    if distance < self.agent_view[i]:
+                        self.agent_view[i] = distance
+                    break
+
         for i in range(len(self.agent_view)):
             self.agent_view[i] = intensity_linear(self.agent_view[i], max_dist)
-        # agent_view vector is ready now
+        """
+        """
+        Variant 3: Start with bins but dont delete guppys, so you can just use two for_loops
+        for i in range(len(self.bins)):
+            for j in range(len(self.others)):
+                distance = float(self.obs_pos.distance(others_c[j]))
+                if distance < self.agent_view[i] and self.bins[i].encloses_point(others_c[j]):
+                    self.agent_view[i] = distance
+            
+            self.agent_view[i] = intensity_linear(self.agent_view[i], max_dist)
+            
+        """
 
     def plot_guppy_bins(self):
         self.ax.cla()  # clear axes
@@ -187,29 +218,21 @@ class Guppy_Calculator():
         # plot legend
         self.ax.text(110, 100, 'angle: {:.2f}°'.format(degrees(self.obs_angle)))
         self.ax.text(110, 90, 'o_vector: ({:.2f},{:.2f})'.format(self.obs_ori[0], self.obs_ori[1]))
-        self.ax.text(110, 80, 'angular turn: {:.10}'.format(self.loc_vec[0]))
-        self.ax.text(110, 70, 'linear speed: {:.10}'.format(self.loc_vec[1]))
-        self.ax.text(110, 60, 'dist travelled: {:.10}'.format(self.dist_difference))
+        self.ax.text(110, 80, 'angular turn: {:.10f}'.format(self.loc_vec[0]))
+        self.ax.text(110, 70, 'linear speed: {:.10f}'.format(self.loc_vec[1]))
+        self.ax.text(110, 60, 'dist travelled: {:.10f}'.format(self.dist_difference))
 
         pyplot.show(block=False)
-        pyplot.pause(0.00000000001)
+        pyplot.pause(0.00000000000001)
 
     def wall_distances(self):
-        def wall_distance(angle):
-            # find distance to wall along a given angle
-            ray = sympy.Ray(self.obs_pos, angle=angle)
-            intersection = ray.intersection(self.tank)
-            return self.obs_pos.distance(intersection[0]), (intersection[0].x, intersection[0].y)
-
-        # find distances for all angles
-        angles = [pi * (i / self.num_rays) + self.obs_angle - pi / 2 for i in range(0, self.num_rays + 1)]
-        self.wall_view = []
+        self.wall_rays = [sympy.Ray(self.obs_pos, angle=x + self.obs_angle) for x in self.wall_angles]
         self.intersections = []
-        for a in angles:
-            d, i = wall_distance(a)
-            # map distances to intensities
-            self.wall_view.append(intensity_linear(d, max_dist))
-            self.intersections.append(i)
+        self.wall_view = []
+        for ray in self.wall_rays:
+            intersection = ray.intersection(self.tank)[0]
+            self.intersections.append(intersection)
+            self.wall_view.append(intensity_linear(self.obs_pos.distance(intersection), max_dist))
 
     def plot_wall_rays(self):
         self.ax.cla()
@@ -226,10 +249,12 @@ class Guppy_Calculator():
             self.ax.plot([self.obs_pos.x, x], [self.obs_pos.y, y])
 
         pyplot.show(block=False)
-        pyplot.pause(0.000001)
+        pyplot.pause(0.00000000001)
 
 
-with h5py.File("guppy_data/couzin_torus/train/8_0000.hdf5", "r") as f:
-    gc = Guppy_Calculator(f, agent=0, num_bins=7, num_rays=5)
-    print("Example: Handcrafted vector for frame 100:\n", gc.craft_vector(100))
-    gc.run_sim(step=5)
+if __name__ == "__main__":
+    with h5py.File("guppy_data/couzin_torus/train/8_0000.hdf5", "r") as f:
+        # agent sets the guppy considered as agent, num_bins defines the view field division, num_rays the wall_rays
+        gc = Guppy_Calculator(f, agent=0, num_bins=7, num_rays=5)
+        print("Example: Handcrafted vector for frame 100:\n", gc.craft_vector(100))
+        gc.run_sim(step=10)
