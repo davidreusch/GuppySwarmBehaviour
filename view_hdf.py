@@ -40,12 +40,16 @@ def sympyToShapelyPolygon(p: Polygon):
         vertices.append((v.x, v.y))
     return shapely.geometry.Polygon(vertices)
 
-
+"""
 def addCorner(p1, p2):
     x = p2.x if 0 < p1.x < 100 else p1.x
     y = p2.y if 0 < p1.y < 100 else p1.y
     return sympy.Point2D(x, y)
-
+"""
+def addCorner(p1, p2):
+    x = p2[0] if 0 < p1[0] < 100 else p1[0]
+    y = p2[1] if 0 < p1[1] < 100 else p1[1]
+    return sympy.Point2D(x, y)
 
 def dot_product(vec1, vec2):
     akk = 0
@@ -70,15 +74,51 @@ def dist_travelled(data_prev, data_cur):
     else:
         return sqrt((data_cur[0] - data_prev[0]) ** 2 + (data_cur[1] - data_prev[1]) ** 2)
 
+def is_in_tank(x,y):
+    return 0 <= x <= 100 and 0 <= y <= 100
+
+def ray_intersections(x, a, tank_walls):
+    #we have the following equations:
+    # lambda * cos(a) + x1 = mu * w1 + b1
+    # lambda * sin(a) + x2 = mu * w2 + b2
+    for w, b in tank_walls:
+        c = cos(a)
+        s = sin(a)
+        lambd = 0
+        if w[0] == 0:
+            if abs(c) < 0.000001:
+                continue
+            lambd = (b[0] - x[0]) / c
+        elif w[1] == 0:
+            if abs(s) < 0.000001:
+                continue
+            lambd = (b[1] - x[1]) / s
+        if lambd >= 0:
+            inters = round(lambd * c + x[0], 6), round(lambd * s + x[1], 6)
+            if is_in_tank(inters[0], inters[1]):
+                return inters
+    return (0,0)
+
+
+
+tank_walls = [((1,0), (0,0)),((1,0), (0,100)),((0,1), (0,0)),((0,1), (100,0))]
+def get_intersections(obs_pos, angle):
+    return ray_intersections(obs_pos, angle, tank_walls)
+
+
 
 # thats the main class, its run method will do all the work
 class Guppy_Calculator():
-    def __init__(self, filepath, agent, num_bins, num_rays):
+    def __init__(self, filepath, agent, num_bins, num_rays, livedata):
         # set up data
 
+        self.filepath = filepath
         with h5py.File(filepath, "r") as hdf_file:
             self.ls = list(hdf_file.keys())
-            self.data = [numpy.array(hdf_file.get("{}".format(i))) for i in range(len(self.ls))]
+            if not livedata:
+                self.data = [numpy.array(hdf_file.get("{}".format(i))) for i in range(len(self.ls))]
+            else:
+                self.data = [numpy.array(hdf_file.get("{}".format(i+1))) for i in range(len(self.ls))]
             self.agent = agent
             self.agent_data = self.data[agent]
 
@@ -104,7 +144,7 @@ class Guppy_Calculator():
         self.loc_vec = None
 
     def preprocess(self):
-        new_path = filepath + ".npy"
+        new_path = self.filepath + ".npy"
         input = numpy.zeros((len(self.agent_data), 2 + self.num_bins + self.num_rays))
         for i in range(1, len(self.agent_data)):
             input[i] = self.craft_vector(i)
@@ -141,16 +181,18 @@ class Guppy_Calculator():
             self.craft_vector(frame)
             self.dist_difference = dist_travelled(self.agent_data[frame - 1], self.agent_data[frame])
             self.plot_guppy_bins()
-            # self.plot_wall_rays() #use either of the two plot_functions, not both at once
+            #self.plot_wall_rays() #use either of the two plot_functions, not both at once
 
     def guppy_distances(self):
         # get the boundaries of the bins by dividing 180 degree field of view by number of bins
         # and make a ray for each resulting angle. To adjust the rays to our angle-system, we have to subtract pi / 2
 
         # get the intersection points of the rays with the tank walls
-        agent_rays = [sympy.Ray(self.obs_pos, angle=x + self.obs_angle) for x in self.bin_angles]
+       # agent_rays = [sympy.Ray(self.obs_pos, angle=x + self.obs_angle) for x in self.bin_angles]
         #agent_rays = [sympy.Ray(sympy.Point2D(self.obs_pos.x, self.obs_pos.y), angle=x + self.obs_angle) for x in self.bin_angles]
-        intersections = [ray.intersection(self.tank)[0] for ray in agent_rays]
+       # intersections = [ray.intersection(self.tank)[0] for ray in agent_rays]
+
+        intersections = [get_intersections(self.obs_pos, angle + self.obs_angle) for angle in self.bin_angles]
 
         # construct the bins as polygons with intersection points and observer position as vertices
         # would surely be more efficient to just use a function which checks if a point lies within a polygon defined
@@ -224,8 +266,6 @@ class Guppy_Calculator():
 
         # plot bins
         for i, p in enumerate(self.bins):
-            #patch = PolygonPatch(sympyToShapelyPolygon(p), facecolor=BLACK, edgecolor=YELLOW,
-            #                     alpha=(1 - self.agent_view[i]), zorder=1)
             patch = PolygonPatch(p, facecolor=BLACK, edgecolor=YELLOW,
                                  alpha=(1 - self.agent_view[i]), zorder=1)
             self.ax.add_patch(patch)
@@ -246,16 +286,24 @@ class Guppy_Calculator():
         pyplot.pause(0.00000000000001)
 
     def wall_distances(self):
+        """
+        old version with simpy Rays
         self.wall_rays = [sympy.Ray(self.obs_pos, angle=x + self.obs_angle) for x in self.wall_angles]
         #sym_pos = sympy.Point2D(self.obs_pos.x, self.obs_pos.y)
         #self.wall_rays = [sympy.Ray(sym_pos, angle=x + self.obs_angle) for x in self.bin_angles]
         self.intersections = []
-        self.wall_view = []
         for ray in self.wall_rays:
             intersection = ray.intersection(self.tank)[0]
             self.intersections.append(intersection)
             #self.wall_view.append(intensity_linear(sym_pos.distance(intersection), max_dist))
             self.wall_view.append(intensity_linear(self.obs_pos.distance(intersection), max_dist))
+        """
+
+        self.wall_view = []
+        self.intersections = [get_intersections(self.obs_pos, angle + self.obs_angle) for angle in self.wall_angles]
+        for intersection in self.intersections:
+            self.wall_view.append(intensity_linear(self.obs_pos.distance(intersection), max_dist))
+
 
     def plot_wall_rays(self):
         self.ax.cla()
@@ -276,11 +324,9 @@ class Guppy_Calculator():
 
 
 if __name__ == "__main__":
-    #with h5py.File("guppy_data/couzin_torus/train/8_0000.hdf5", "r") as f:
-        # agent sets the guppy considered as agent, num_bins defines the view field division, num_rays the wall_rays
-
-    filepath = "guppy_data/couzin_torus/train/8_0002.hdf5"
-    gc = Guppy_Calculator(filepath, agent=0, num_bins=7, num_rays=5)
+    filepath =  "guppy_data/couzin_torus/train/8_0000.hdf5"
+    filepathlive = "guppy_data/live_female_female/train/CameraCapture2019-05-03T11_22_33_8108-sub_0.hdf5"
+    gc = Guppy_Calculator(filepath, agent=0, num_bins=7, num_rays=5, livedata=False)
     #gc.preprocess()
-    print("Example: Handcrafted vector for frame 100:\n", gc.craft_vector(100))
-    gc.run_sim(step=10)
+    #print("Example: Handcrafted vector for frame 100:\n", gc.craft_vector(100))
+    gc.run_sim(step=1)
