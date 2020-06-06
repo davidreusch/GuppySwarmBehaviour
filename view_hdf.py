@@ -1,13 +1,12 @@
 import h5py
 import numpy
-import sympy
-from sympy.geometry.polygon import Polygon
 from math import *
 from matplotlib import pyplot
 from shapely.geometry import Polygon as ShapelyPolygon
 import shapely
 from descartes.patch import PolygonPatch
 from figures import BLUE, RED, BLACK, YELLOW, SIZE, set_limits, plot_coords, color_isvalid
+from time import perf_counter
 
 
 # Whole code is inspired by Moritz Maxeiners master thesis and his code for the thesis
@@ -28,28 +27,19 @@ max_dist = 70
 
 
 # map distance to value in range(0,1) - greater distance -> lesser intensity (from Moritz Maxeiner)
-def intensity_linear(dist, max_dist):
-    if dist < 0 or max_dist < dist:
+def intensity_linear(distance):
+    if distance < 0 or max_dist < distance:
         return 0
-    return 1 - float(dist) / max_dist
+    return 1 - float(distance) / max_dist
 
 
-def sympyToShapelyPolygon(p: Polygon):
-    vertices = []
-    for v in p.vertices:
-        vertices.append((v.x, v.y))
-    return shapely.geometry.Polygon(vertices)
-
-"""
-def addCorner(p1, p2):
-    x = p2.x if 0 < p1.x < 100 else p1.x
-    y = p2.y if 0 < p1.y < 100 else p1.y
-    return sympy.Point2D(x, y)
-"""
 def addCorner(p1, p2):
     x = p2[0] if 0 < p1[0] < 100 else p1[0]
     y = p2[1] if 0 < p1[1] < 100 else p1[1]
-    return sympy.Point2D(x, y)
+    return x, y
+
+def dist(p, q):
+    return sqrt((p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2)
 
 def dot_product(vec1, vec2):
     akk = 0
@@ -74,13 +64,17 @@ def dist_travelled(data_prev, data_cur):
     else:
         return sqrt((data_cur[0] - data_prev[0]) ** 2 + (data_cur[1] - data_prev[1]) ** 2)
 
-def is_in_tank(x,y):
+
+def is_in_tank(x, y):
     return 0 <= x <= 100 and 0 <= y <= 100
 
-def ray_intersections(x, a, tank_walls):
-    #we have the following equations:
+
+tank_walls = [((1, 0), (0, 0)), ((1, 0), (0, 100)), ((0, 1), (0, 0)), ((0, 1), (100, 0))]
+def ray_intersection(x, a):
+    # we have the following equations:
     # lambda * cos(a) + x1 = mu * w1 + b1
     # lambda * sin(a) + x2 = mu * w2 + b2
+    # x = (x.x, x.y)
     for w, b in tank_walls:
         c = cos(a)
         s = sin(a)
@@ -97,14 +91,8 @@ def ray_intersections(x, a, tank_walls):
             inters = round(lambd * c + x[0], 6), round(lambd * s + x[1], 6)
             if is_in_tank(inters[0], inters[1]):
                 return inters
-    return (0,0)
-
-
-
-tank_walls = [((1,0), (0,0)),((1,0), (0,100)),((0,1), (0,0)),((0,1), (100,0))]
-def get_intersections(obs_pos, angle):
-    return ray_intersections(obs_pos, angle, tank_walls)
-
+    print("ERROR: no intersection point found!")
+    return -1, -1
 
 
 # thats the main class, its run method will do all the work
@@ -118,7 +106,7 @@ class Guppy_Calculator():
             if not livedata:
                 self.data = [numpy.array(hdf_file.get("{}".format(i))) for i in range(len(self.ls))]
             else:
-                self.data = [numpy.array(hdf_file.get("{}".format(i+1))) for i in range(len(self.ls))]
+                self.data = [numpy.array(hdf_file.get("{}".format(i + 1))) for i in range(len(self.ls))]
             self.agent = agent
             self.agent_data = self.data[agent]
 
@@ -127,8 +115,6 @@ class Guppy_Calculator():
         self.ax.set_title('tank')
         set_limits(self.ax, 0, 100, 0, 100)
         # tank coordinates are just 100 x 100 square
-        coords = [(0, 0), (100, 0), (100, 100), (0, 100)]
-        self.tank = sympy.geometry.polygon.Polygon(*coords)
 
         # data to be calculated
         self.num_bins = num_bins
@@ -146,27 +132,28 @@ class Guppy_Calculator():
     def preprocess(self):
         new_path = self.filepath + ".npy"
         input = numpy.zeros((len(self.agent_data), 2 + self.num_bins + self.num_rays))
+        start = perf_counter()
         for i in range(1, len(self.agent_data)):
             input[i] = self.craft_vector(i)
+        end = perf_counter()
+        elapsed = end - start
         numpy.save(new_path, input)
 
-        for i in numpy.load(new_path):
-            print(i)
+        print("Preprocessing took ", elapsed)
+        # for i in numpy.load(new_path):
+        #    print(i)
 
     def craft_vector(self, i):
         """calculate the vector v = (locomotion, agent_view, wall_view) from the raw data"""
         # get position of guppy 0 and convert it to sympy point
-        self.obs_pos = sympy.Point2D(self.agent_data[i][0], self.agent_data[i][1])
-        #self.obs_pos = shapely.geometry.Point((self.agent_data[i][0], self.agent_data[i][1]))
+        self.obs_pos = (self.agent_data[i][0], self.agent_data[i][1])
         # get orientation vector
         self.obs_ori = (self.agent_data[i][2], self.agent_data[i][3])
         # calculate angle of guppy_orientation with respect to x_axis
         self.obs_angle = vec_to_angle(self.obs_ori[0], self.obs_ori[1])
         # calculate positions of other guppys
-        self.others = [sympy.Point2D(self.data[j][i][0], self.data[j][i][1])
+        self.others = [(self.data[j][i][0], self.data[j][i][1])
                        for j in range(len(self.ls)) if j != self.agent]
-        #self.others = [shapely.geometry.Point((self.data[j][i][0], self.data[j][i][1]))
-        #               for j in range(len(self.ls)) if j != self.agent]
         # calculate intensity vector wall_view for distance to walls
         self.wall_distances()
         # calculate intensity vector agent_view for distance to nearby guppies
@@ -188,11 +175,7 @@ class Guppy_Calculator():
         # and make a ray for each resulting angle. To adjust the rays to our angle-system, we have to subtract pi / 2
 
         # get the intersection points of the rays with the tank walls
-       # agent_rays = [sympy.Ray(self.obs_pos, angle=x + self.obs_angle) for x in self.bin_angles]
-        #agent_rays = [sympy.Ray(sympy.Point2D(self.obs_pos.x, self.obs_pos.y), angle=x + self.obs_angle) for x in self.bin_angles]
-       # intersections = [ray.intersection(self.tank)[0] for ray in agent_rays]
-
-        intersections = [get_intersections(self.obs_pos, angle + self.obs_angle) for angle in self.bin_angles]
+        intersections = [ray_intersection(self.obs_pos, angle + self.obs_angle) for angle in self.bin_angles]
 
         # construct the bins as polygons with intersection points and observer position as vertices
         # would surely be more efficient to just use a function which checks if a point lies within a polygon defined
@@ -200,11 +183,9 @@ class Guppy_Calculator():
         self.bins = []
         for i in range(len(intersections) - 1):
             if intersections[i][0] == intersections[i + 1][0] or intersections[i][1] == intersections[i + 1][1]:
-                #self.bins.append(Polygon(self.obs_pos, intersections[i], intersections[i + 1]))
                 self.bins.append(ShapelyPolygon([self.obs_pos, intersections[i], intersections[i + 1]]))
             else:  # if the intersection points overlap a corner of the tank, we have to add that corner to the polygon
                 corner = addCorner(intersections[i], intersections[i + 1])
-                #self.bins.append(Polygon(self.obs_pos, intersections[i], corner, intersections[i + 1]))
                 self.bins.append(ShapelyPolygon([self.obs_pos, intersections[i], corner, intersections[i + 1]]))
 
         # loop through the bins and find the closest guppy for each bin
@@ -217,8 +198,8 @@ class Guppy_Calculator():
         for i in range(len(self.bins)):
             j = 0
             while j < length:
-                if self.bins[i].contains(shapely.geometry.Point(others_c[j].x, others_c[j].y)):
-                    distance = float(self.obs_pos.distance(others_c[j]))
+                if self.bins[i].contains(shapely.geometry.Point(others_c[j], others_c[j])):
+                    distance = dist(self.obs_pos, others_c[j])
                     if distance < self.agent_view[i]:
                         self.agent_view[i] = distance
                     del (others_c[j])
@@ -226,7 +207,7 @@ class Guppy_Calculator():
                 else:
                     j += 1
 
-            self.agent_view[i] = intensity_linear(self.agent_view[i], max_dist)
+            self.agent_view[i] = intensity_linear(self.agent_view[i])
 
         # agent_view vector is ready now
         """
@@ -271,9 +252,9 @@ class Guppy_Calculator():
             self.ax.add_patch(patch)
 
         # plot fishes
-        self.ax.plot(self.obs_pos.x, self.obs_pos.y, "go")  # self
+        self.ax.plot(self.obs_pos[0], self.obs_pos[1], "go")  # self
         for i in range(len(self.others)):
-            self.ax.plot([self.others[i].x], [self.others[i].y], "r.")  # others
+            self.ax.plot([self.others[i][0]], [self.others[i][1]], "r.")  # others
 
         # plot legend
         self.ax.text(110, 100, 'angle: {:.2f}°'.format(degrees(self.obs_angle)))
@@ -286,24 +267,10 @@ class Guppy_Calculator():
         pyplot.pause(0.00000000000001)
 
     def wall_distances(self):
-        """
-        old version with simpy Rays
-        self.wall_rays = [sympy.Ray(self.obs_pos, angle=x + self.obs_angle) for x in self.wall_angles]
-        #sym_pos = sympy.Point2D(self.obs_pos.x, self.obs_pos.y)
-        #self.wall_rays = [sympy.Ray(sym_pos, angle=x + self.obs_angle) for x in self.bin_angles]
-        self.intersections = []
-        for ray in self.wall_rays:
-            intersection = ray.intersection(self.tank)[0]
-            self.intersections.append(intersection)
-            #self.wall_view.append(intensity_linear(sym_pos.distance(intersection), max_dist))
-            self.wall_view.append(intensity_linear(self.obs_pos.distance(intersection), max_dist))
-        """
-
-        self.wall_view = []
-        self.intersections = [get_intersections(self.obs_pos, angle + self.obs_angle) for angle in self.wall_angles]
-        for intersection in self.intersections:
-            self.wall_view.append(intensity_linear(self.obs_pos.distance(intersection), max_dist))
-
+        #self.intersections = [ray_intersection(self.obs_pos, angle + self.obs_angle) for angle in self.wall_angles]
+        self.wall_view = [intensity_linear(
+                            dist(self.obs_pos, ray_intersection(self.obs_pos, angle + self.obs_angle)))
+                          for angle in self.wall_angles]
 
     def plot_wall_rays(self):
         self.ax.cla()
@@ -315,18 +282,19 @@ class Guppy_Calculator():
         self.ax.add_patch(patch)
 
         # plot rays
-        self.ax.plot(self.obs_pos.x, self.obs_pos.y, "ro")
+        self.ax.plot(self.obs_pos[0], self.obs_pos[1], "ro")
+        # uncomment line for intersections in wall_distances
         for (x, y) in self.intersections:
-            self.ax.plot([self.obs_pos.x, x], [self.obs_pos.y, y])
+            self.ax.plot([self.obs_pos[0], x], [self.obs_pos[1], y])
 
         pyplot.show(block=False)
         pyplot.pause(0.00000000001)
 
 
 if __name__ == "__main__":
-    filepath =  "guppy_data/couzin_torus/train/8_0000.hdf5"
+    filepath = "guppy_data/couzin_torus/train/8_0002.hdf5"
     filepathlive = "guppy_data/live_female_female/train/CameraCapture2019-05-03T11_22_33_8108-sub_0.hdf5"
-    gc = Guppy_Calculator(filepath, agent=0, num_bins=7, num_rays=5, livedata=False)
+    gc = Guppy_Calculator(filepathlive, agent=0, num_bins=7, num_rays=5, livedata=True)
     #gc.preprocess()
-    #print("Example: Handcrafted vector for frame 100:\n", gc.craft_vector(100))
+    # print("Example: Handcrafted vector for frame 100:\n", gc.craft_vector(100))
     gc.run_sim(step=1)
