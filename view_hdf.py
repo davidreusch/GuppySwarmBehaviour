@@ -38,8 +38,10 @@ def addCorner(p1, p2):
     y = p2[1] if 0 < p1[1] < 100 else p1[1]
     return x, y
 
+
 def dist(p, q):
     return sqrt((p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2)
+
 
 def dot_product(vec1, vec2):
     akk = 0
@@ -70,6 +72,8 @@ def is_in_tank(x, y):
 
 
 tank_walls = [((1, 0), (0, 0)), ((1, 0), (0, 100)), ((0, 1), (0, 0)), ((0, 1), (100, 0))]
+
+
 def ray_intersection(x, a):
     # we have the following equations:
     # lambda * cos(a) + x1 = mu * w1 + b1
@@ -97,7 +101,7 @@ def ray_intersection(x, a):
 
 # thats the main class, its run method will do all the work
 class Guppy_Calculator():
-    def __init__(self, filepath, agent, num_bins, num_rays, livedata):
+    def __init__(self, filepath, agent, num_bins, num_rays, livedata, simulation=False):
         # set up data
 
         self.filepath = filepath
@@ -110,17 +114,18 @@ class Guppy_Calculator():
             self.agent = agent
             self.agent_data = self.data[agent]
 
-        # set up axes
-        self.fig, self.ax = pyplot.subplots()
-        self.ax.set_title('tank')
-        set_limits(self.ax, 0, 100, 0, 100)
-        # tank coordinates are just 100 x 100 square
+        self.length = len(self.agent_data)
 
-        # data to be calculated
         self.num_bins = num_bins
         self.num_rays = num_rays
         self.bin_angles = [pi * (i / self.num_bins) - pi / 2 for i in range(0, self.num_bins + 1)]
         self.wall_angles = [pi * (i / self.num_rays) - pi / 2 for i in range(0, self.num_rays)]
+        if simulation:
+            self.fig, self.ax = pyplot.subplots()
+            self.ax.set_title('tank')
+            set_limits(self.ax, 0, 100, 0, 100)
+
+        # data to be calculated
         self.agent_view = None
         self.wall_view = None
         self.obs_pos = None
@@ -128,6 +133,14 @@ class Guppy_Calculator():
         self.obs_angle = None
         self.others = None
         self.loc_vec = None
+
+    def get_data_from_file(self):
+        #input = numpy.zeros((len(self.agent_data), 2 + self.num_bins + self.num_rays))
+        input = []
+        for i in range(len(self.agent_data)):
+        #    input[i] = self.craft_vector(i)
+            input.append( self.craft_vector(i))
+        return numpy.array(input)
 
     def preprocess(self):
         new_path = self.filepath + ".npy"
@@ -168,7 +181,7 @@ class Guppy_Calculator():
             self.craft_vector(frame)
             self.dist_difference = dist_travelled(self.agent_data[frame - 1], self.agent_data[frame])
             self.plot_guppy_bins()
-            #self.plot_wall_rays() #use either of the two plot_functions, not both at once
+            # self.plot_wall_rays() #use either of the two plot_functions, not both at once
 
     def guppy_distances(self):
         # get the boundaries of the bins by dividing 180 degree field of view by number of bins
@@ -198,7 +211,7 @@ class Guppy_Calculator():
         for i in range(len(self.bins)):
             j = 0
             while j < length:
-                if self.bins[i].contains(shapely.geometry.Point(others_c[j], others_c[j])):
+                if self.bins[i].contains(shapely.geometry.Point(others_c[j][0], others_c[j][1])):
                     distance = dist(self.obs_pos, others_c[j])
                     if distance < self.agent_view[i]:
                         self.agent_view[i] = distance
@@ -208,8 +221,18 @@ class Guppy_Calculator():
                     j += 1
 
             self.agent_view[i] = intensity_linear(self.agent_view[i])
-
         # agent_view vector is ready now
+
+        """
+        Variant 3: Start with bins but dont delete guppys, so you can just use two for_loops
+        for i in range(len(self.bins)):
+            for j in range(len(self.others)):
+                distance = dist(self.obs_pos, others_c[j])
+                if distance < self.agent_view[i] \
+                        and self.bins[i].contains(shapely.geometry.Point(others_c[j][0], others_c[j][1])):
+                    self.agent_view[i] = distance
+            self.agent_view[i] = intensity_linear(self.agent_view[i])
+        """
         """
         Variant 2: start the loop with the guppys and break if you found its bin
         for guppy in self.others:
@@ -219,21 +242,10 @@ class Guppy_Calculator():
                     if distance < self.agent_view[i]:
                         self.agent_view[i] = distance
                     break
-
         for i in range(len(self.agent_view)):
             self.agent_view[i] = intensity_linear(self.agent_view[i], max_dist)
         """
-        """
-        Variant 3: Start with bins but dont delete guppys, so you can just use two for_loops
-        for i in range(len(self.bins)):
-            for j in range(len(self.others)):
-                distance = float(self.obs_pos.distance(others_c[j]))
-                if distance < self.agent_view[i] and self.bins[i].encloses_point(others_c[j]):
-                    self.agent_view[i] = distance
-            
-            self.agent_view[i] = intensity_linear(self.agent_view[i], max_dist)
-            
-        """
+
 
     def plot_guppy_bins(self):
         self.ax.cla()  # clear axes
@@ -267,10 +279,10 @@ class Guppy_Calculator():
         pyplot.pause(0.00000000000001)
 
     def wall_distances(self):
-        #self.intersections = [ray_intersection(self.obs_pos, angle + self.obs_angle) for angle in self.wall_angles]
+        # self.intersections = [ray_intersection(self.obs_pos, angle + self.obs_angle) for angle in self.wall_angles]
         self.wall_view = [intensity_linear(
-                            dist(self.obs_pos, ray_intersection(self.obs_pos, angle + self.obs_angle)))
-                          for angle in self.wall_angles]
+            dist(self.obs_pos, ray_intersection(self.obs_pos, angle + self.obs_angle)))
+            for angle in self.wall_angles]
 
     def plot_wall_rays(self):
         self.ax.cla()
@@ -294,7 +306,7 @@ class Guppy_Calculator():
 if __name__ == "__main__":
     filepath = "guppy_data/couzin_torus/train/8_0002.hdf5"
     filepathlive = "guppy_data/live_female_female/train/CameraCapture2019-05-03T11_22_33_8108-sub_0.hdf5"
-    gc = Guppy_Calculator(filepathlive, agent=0, num_bins=7, num_rays=5, livedata=True)
+    gc = Guppy_Calculator(filepath, agent=0, num_bins=7, num_rays=5, livedata=False)
     #gc.preprocess()
     # print("Example: Handcrafted vector for frame 100:\n", gc.craft_vector(100))
     gc.run_sim(step=1)
