@@ -7,6 +7,7 @@ import shapely
 from descartes.patch import PolygonPatch
 from figures import BLUE, RED, BLACK, YELLOW, SIZE, set_limits, plot_coords, color_isvalid
 from time import perf_counter
+from torch.utils.data import Dataset
 
 
 # Whole code is inspired by Moritz Maxeiners master thesis and his code for the thesis
@@ -100,7 +101,7 @@ def ray_intersection(x, a):
 
 
 # thats the main class, its run method will do all the work
-class Guppy_Calculator():
+class Guppy_Calculator(Dataset): #TODO erben lassen von Dataset
     def __init__(self, filepath, agent, num_bins, num_rays, livedata, simulation=False):
         # set up data
 
@@ -134,13 +135,21 @@ class Guppy_Calculator():
         self.others = None
         self.loc_vec = None
 
-    def get_data_from_file(self):
+    def get_data(self):
         #input = numpy.zeros((len(self.agent_data), 2 + self.num_bins + self.num_rays))
-        input = []
-        for i in range(len(self.agent_data)):
-        #    input[i] = self.craft_vector(i)
-            input.append( self.craft_vector(i))
-        return numpy.array(input)
+        out = []
+        for i in range( len(self.agent_data)):
+            out.append(self.craft_vector(i))
+        return out
+
+    def get_data_new(self):
+        #input = numpy.zeros((len(self.agent_data), 2 + self.num_bins + self.num_rays))
+        sensory = []
+        loc = []
+        for i in range(1, len(self.agent_data)):
+            loc.append(self.get_loc_vec(i))
+            sensory.append(self.craft_vector(i))
+        return numpy.array(loc), numpy.array(sensory)
 
     def preprocess(self):
         new_path = self.filepath + ".npy"
@@ -175,6 +184,10 @@ class Guppy_Calculator():
         self.loc_vec = get_locomotion_vec(self.agent_data[i - 1], self.agent_data[i])
         # we return the vector already concatenated in a numpy_vector
         return numpy.concatenate((numpy.array(self.loc_vec), numpy.array(self.agent_view), numpy.array(self.wall_view)))
+        #return numpy.concatenate((numpy.array(self.agent_view), numpy.array(self.wall_view)))
+
+    def get_loc_vec(self, i):
+        return numpy.array(get_locomotion_vec(self.agent_data[i - 1], self.agent_data[i]))
 
     def run_sim(self, step):
         for frame in range(1, len(self.agent_data), step):
@@ -303,10 +316,31 @@ class Guppy_Calculator():
         pyplot.pause(0.00000000001)
 
 
+class Guppy_Dataset(Dataset):
+
+    def __init__(self, filepaths, agent, num_bins, num_rays, livedata):
+        self.livedata = livedata
+        self.num_rays = num_rays
+        self.num_bins = num_bins
+        self.agent = agent
+        self.length = len(filepaths)
+        self.filepaths = filepaths
+
+    def __len__(self):
+        return self.length
+
+    def __getitem__(self, i):
+        gc = Guppy_Calculator(filepath[i], self.agent, self.num_bins, self.num_rays, self.livedata)
+        x_loc, x_sensory = gc.get_data()
+        y_loc = numpy.roll(x_loc, -1, 0)
+        return x_loc[:-1, :], x_sensory[:-1, :], y_loc[:-1, :]
+
+
 if __name__ == "__main__":
     filepath = "guppy_data/couzin_torus/train/8_0002.hdf5"
-    filepathlive = "guppy_data/live_female_female/train/CameraCapture2019-05-03T11_22_33_8108-sub_0.hdf5"
-    gc = Guppy_Calculator(filepath, agent=0, num_bins=7, num_rays=5, livedata=False)
+    #filepathlive = "guppy_data/live_female_female/train/CameraCapture2019-05-03T11_22_33_8108-sub_0.hdf5"
+    filepathlive = "guppy_data/live_female_female/train/CameraCapture2019-06-20T15_35_23_672-sub_1.hdf5"
+    gc = Guppy_Calculator(filepathlive, agent=0, num_bins=7, num_rays=5, livedata=True, simulation=True)
     #gc.preprocess()
     # print("Example: Handcrafted vector for frame 100:\n", gc.craft_vector(100))
     gc.run_sim(step=1)

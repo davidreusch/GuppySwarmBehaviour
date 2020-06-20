@@ -9,6 +9,7 @@ from view_hdf import get_locomotion_vec, Guppy_Calculator
 from os import listdir
 from os.path import isfile, join
 import sys
+import copy
 
 torch.manual_seed(1)
 # get the files for 4, 6 and 8 guppys
@@ -22,7 +23,7 @@ num_guppy_bins = 20
 num_wall_rays = 20
 input_dim = num_guppy_bins + num_wall_rays + 2
 agent = 0
-angle_bins = 20
+angle_bins = 10
 speed_bins = 2  # take only 2 bins for the speed data which is constant in the simulated data
 output_dim = angle_bins + speed_bins
 
@@ -44,14 +45,12 @@ def one_hot(value, min, max, num_bins, get_class=False):
             return 0
         else:
             return num_bins - 1
-            # i = num_bins - 1
 
-        # print("Value ", value, " not in range ", min, ", ", max)
     return res
 
 
 def one_hot_wrap(arr):
-    # take
+    # take one hot of the first to values of the array and return these class numbers as an array
     angle_label = one_hot(arr[0], -0.04, 0.04, angle_bins, get_class=True)
     speed_label = one_hot(arr[1], 0.0, 0.4, speed_bins, get_class=True)
     return np.array([angle_label, speed_label])
@@ -74,7 +73,7 @@ def get_batches(files, num_files, n_steps):
     arr = []
     for i in range(num_files):
         gc = Guppy_Calculator(files[i], agent, num_guppy_bins, num_wall_rays, livedata=False)
-        data = gc.get_data_from_file()
+        data = gc.get_data()
         # print(data.shape)
         arr.append(data)
 
@@ -92,6 +91,7 @@ def get_batches(files, num_files, n_steps):
 
         # The features
         x = arr[:, n:n + n_steps, :]
+        #x = arr[:, : n_steps, :]
 
         # The targets, shifted by one
         y = np.zeros_like(x)
@@ -99,8 +99,10 @@ def get_batches(files, num_files, n_steps):
         # shift the targets
         try:
             y[:, :-1, :], y[:, -1, :] = x[:, 1:, :], arr[:, n + n_steps, :]
+            #y[:, :-1, :], y[:, -1, :] = x[:, 1:, :], arr[:,  n_steps, :]
         except IndexError:
-            y[:, :-1, :], y[:, -1, :] = x[:, 1:, :], arr[:, n + n_steps - 1, :]
+            y[:, :-1, :], y[:, -1, :] = x[:, 1:, :], arr[:, n + n_steps - 2, :]
+            #y[:, :-1, :], y[:, -1, :] = x[:, 1:, :], arr[:, n_steps - 1, :]
 
         res.append((torch.from_numpy(x), torch.from_numpy(np.apply_along_axis(one_hot_wrap, 2, y))))
 
@@ -108,19 +110,24 @@ def get_batches(files, num_files, n_steps):
 
 
 # take all the files
-num_files = len(files)
-
+num_files = len(files) // 20
+#num_files = 3
 # take half of each track as a sequence length
-num_steps = 375
+num_steps = 25
+num_layers = 1
 
 # inspired by https://github.com/LeanManager/NLP-PyTorch/blob/master/Character-Level%20LSTM%20with%20PyTorch.ipynb
+# TODO: Dataloader erstellen 748 x 2 Vektoren für input und targets
+# TODO: Batching entlang ganzer Sequenzen
+# TODO: Wie gibt das Netzwerk die Komponenten aus?
+# TODO: Klassifizierung vs Regression
 class LSTM(nn.Module):
     def __init__(self, input_size=input_dim, hidden_layer_size=100, output_size=output_dim, num_seqs=num_files):
         # output size has to be the number of bins for first loc vec component + for the second
         super().__init__()
         self.hidden_layer_size = hidden_layer_size
 
-        self.lstm = nn.LSTM(input_size, hidden_layer_size, batch_first=True)
+        self.lstm = nn.LSTM(input_size, hidden_layer_size, num_layers, batch_first=True)
 
         self.linear1 = nn.Linear(hidden_layer_size, angle_bins)
         self.linear2 = nn.Linear(hidden_layer_size, speed_bins)
@@ -145,13 +152,24 @@ class LSTM(nn.Module):
 
         return angle_out, speed_out, (h, c)
 
-    def init_hidden(self, n_seqs):
+    def predict(self, test_ex, hc):
+        x, (h, c) = self.lstm(test_ex, hc)
+        angle_out = self.linear1(x)
+        speed_out = self.linear2(x)
+        m = nn.Softmax(dim=1)
+        angle_pred = m(angle_out)
+        speed_pred = m(speed_out)
+
+
+
+
+    def init_hidden(self, n_seqs, num_layers):
         ''' Initializes hidden state '''
         # Create two new tensors with sizes n_layers x n_seqs x n_hidden,
         # initialized to zero, for hidden state and cell state of LSTM
         weight = next(self.parameters()).data
-        return (weight.new(1, n_seqs, self.hidden_layer_size).zero_(),
-                weight.new(1, n_seqs, self.hidden_layer_size).zero_())
+        return (weight.new(num_layers, n_seqs, self.hidden_layer_size).zero_(),
+                weight.new(num_layers, n_seqs, self.hidden_layer_size).zero_())
 
 
 torch.set_default_dtype(torch.float64)
@@ -164,9 +182,8 @@ epochs = 200
 
 data = get_batches(files, num_files, num_steps)
 #print(data[0][0].size())
-# inspired by https://github.com/LeanManager/NLP-PyTorch/blob/master/Character-Level%20LSTM%20with%20PyTorch.ipynb
 for i in range(epochs):
-    h = model.init_hidden(num_files)
+    h = model.init_hidden(num_files, num_layers)
     counter = 0
     for x, y in data:
         inputs, targets = x, y
@@ -174,6 +191,7 @@ for i in range(epochs):
         # Creating new variables for the hidden state, otherwise
         # we'd backprop through the entire training history
         h = tuple([each.data for each in h])
+
         model.zero_grad()
 
         angle_out, speed_out, h = model.forward(inputs, h)
@@ -186,15 +204,29 @@ for i in range(epochs):
         angle_targets = targets[:, 0]
         speed_targets = targets[:, 1]
 
-        # m = nn.Softmax(dim=1)
-        # angle_out = m(angle_out)
-        # speed_out = m(speed_out)
+        m = nn.Softmax(dim=1)
+        angle_pred = m(angle_out)
+        speed_pred = m(speed_out)
+        """
+        print("angle_output: ")
+        print(angle_out.size())
+        print(angle_out)
+        print("angle_prediction: ")
+        print(angle_pred.size())
+        print(angle_pred)
+        print("speed_output: ")
+        print(speed_out.size())
+        print(speed_out)
+        print("speed_prediction: ")
+        print(speed_pred.size())
+        print(speed_pred)
+        """
 
         # cross entropy should work without the softmax as far as I understand
         loss1 = loss_function(angle_out, angle_targets)
         loss2 = loss_function(speed_out, speed_targets)
         loss = loss1 + loss2
-        loss.backward()
+        loss.backward(retain_graph=True)
         optimizer.step()
 
         #print every 250th time
