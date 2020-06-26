@@ -23,16 +23,16 @@ agent = 0
 angle_bins = 10
 speed_bins = 2  # take only 2 bins for the speed data which is constant in the simulated data
 output_dim = angle_bins + speed_bins
-num_layers = 1
-hidden_layer_size = 100
+num_layers = 2
+hidden_layer_size = 200
 
 # get the files for 4, 6 and 8 guppys
 mypath = "guppy_data/couzin_torus/train/"
 livepath = "guppy_data/live_female_female/train/"
-#files = [join(mypath, f) for f in listdir(mypath) if
-#       isfile(join(mypath, f)) and (f[0] == "4" or f[0] == "6") or f[0] == "8"]
+files = [join(mypath, f) for f in listdir(mypath) if
+       isfile(join(mypath, f)) and f[0] == "4" or f[0] == "6" or f[0] == "8"]
 
-files = [join(livepath, f) for f in listdir(livepath) if isfile(join(livepath, f))]
+#files = [join(mypath, f) for f in listdir(mypath) if isfile(join(mypath, f))]
 files.sort()
 num_files = len(files)
 files = files[:num_files]
@@ -46,15 +46,15 @@ model = LSTM()
 # now we use a regression model, just predict the absolute values of linear speed and angular turn
 # so we need squared_error loss
 loss_function = nn.MSELoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=0.005)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 print(model)
 # training
-epochs = 100
+epochs = 200
 batch_size = 4
 #PATH = "guppy_net.pth"
 PATH = "guppy_net_live.pth"
 
-dataset = Guppy_Dataset(files, 0, num_guppy_bins, num_wall_rays, livedata=True)
+dataset = Guppy_Dataset(files, 0, num_guppy_bins, num_wall_rays, livedata=False)
 dataloader = DataLoader(dataset, batch_size=batch_size, drop_last=True, shuffle=True)
 
 """
@@ -77,10 +77,11 @@ for i in range(epochs):
 
         loss = loss_function(prediction, targets)
         loss.backward()
+        optimizer.step()
 
+    print(f'epoch: {i:3} loss: {loss.item():10.10f}')
 
-
-
+torch.save(model.state_dict(), PATH)
 
 #             if get_class:
 #                 return i
