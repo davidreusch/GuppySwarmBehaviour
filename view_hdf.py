@@ -80,18 +80,32 @@ def ray_intersection(x, a):
     # lambda * cos(a) + x1 = mu * w1 + b1
     # lambda * sin(a) + x2 = mu * w2 + b2
     # x = (x.x, x.y)
+    c = cos(a)
+    s = sin(a)
+    # if we have a case where cos or sin are close to 0, we can immediately return some value
+    if abs(c) < 0.0001:
+        print('edge case: angle almost 90 or 270')
+        if a > 0:
+            return x[0], 100
+        else:
+            return x[0], 0
+    elif abs(a) < 0.0001:
+        print('edge case: angle very small')
+        return 100, x[1]
+    elif abs(abs(a) - pi) < 0.0001:
+        print('edge case: angle almost 180')
+        return 0, x[1]
+
+    # else we iterate through the lines which represent the tank walls
+    # and search the intersection point with the line given by position and orientation-angle of the agent
     for w, b in tank_walls:
-        c = cos(a)
-        s = sin(a)
         lambd = 0
         if w[0] == 0:
-            if abs(c) < 0.000001:
-                continue
             lambd = (b[0] - x[0]) / c
         elif w[1] == 0:
-            if abs(s) < 0.000001:
-                continue
             lambd = (b[1] - x[1]) / s
+
+
         if lambd >= 0:
             inters = round(lambd * c + x[0], 6), round(lambd * s + x[1], 6)
             if is_in_tank(inters[0], inters[1]):
@@ -121,6 +135,7 @@ class Guppy_Calculator():
         self.num_rays = num_wall_rays
         self.bin_angles = [pi * (i / self.num_bins) - pi / 2 for i in range(0, self.num_bins + 1)]
         self.wall_angles = [pi * (i / self.num_rays) - pi / 2 for i in range(0, self.num_rays)]
+        self.simulation = simulation
         if simulation:
             self.fig, self.ax = pyplot.subplots()
             self.ax.set_title('tank')
@@ -180,7 +195,8 @@ class Guppy_Calculator():
         # calculate intensity vector agent_view for distance to nearby guppies
         self.guppy_distances()
         # loc_vec[0] = angular turn; loc_vec[1] = linear speed
-        self.loc_vec = get_locomotion_vec(self.agent_data[i - 1], self.agent_data[i])
+        if self.simulation:
+            self.loc_vec = get_locomotion_vec(self.agent_data[i - 1], self.agent_data[i])
         # we return the vector already concatenated in a numpy_vector
         #return numpy.concatenate((numpy.array(self.loc_vec), numpy.array(self.agent_view), numpy.array(self.wall_view)))
         return numpy.concatenate((numpy.array(self.agent_view), numpy.array(self.wall_view)))
@@ -341,5 +357,5 @@ class Guppy_Dataset(Dataset):
 if __name__ == "__main__":
     filepath = "guppy_data/couzin_torus/train/8_0002.hdf5"
     filepathlive = "guppy_data/live_female_female/train/CameraCapture2019-06-20T15_35_23_672-sub_1.hdf5"
-    gc = Guppy_Calculator(filepathlive, agent=0, num_guppy_bins=7, num_wall_rays=5, livedata=True, simulation=True)
+    gc = Guppy_Calculator(filepathlive, agent=0, num_guppy_bins=20, num_wall_rays=5, livedata=True, simulation=True)
     gc.run_sim(step=1)

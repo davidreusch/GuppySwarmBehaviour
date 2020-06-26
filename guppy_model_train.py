@@ -9,6 +9,7 @@ from view_hdf import get_locomotion_vec, Guppy_Calculator, Guppy_Dataset
 from os import listdir
 from os.path import isfile, join
 from torch.utils.data import Dataset, DataLoader
+from guppy_model import LSTM
 import sys
 import copy
 
@@ -27,148 +28,15 @@ hidden_layer_size = 100
 
 # get the files for 4, 6 and 8 guppys
 mypath = "guppy_data/couzin_torus/train/"
-files = [join(mypath, f) for f in listdir(mypath) if
-         isfile(join(mypath, f)) and (f[0] == "4" or f[0] == "6") or f[0] == "8"]
+livepath = "guppy_data/live_female_female/train/"
+#files = [join(mypath, f) for f in listdir(mypath) if
+#       isfile(join(mypath, f)) and (f[0] == "4" or f[0] == "6") or f[0] == "8"]
+
+files = [join(livepath, f) for f in listdir(livepath) if isfile(join(livepath, f))]
 files.sort()
 num_files = len(files)
 files = files[:num_files]
 print(files)
-
-
-# functions to set up the data:
-def one_hot(value, min, max, num_bins, get_class=False):
-    step = (max - min) / num_bins
-    res = np.zeros(num_bins)
-    for i in range(num_bins):
-        if min + i * step <= value < min + (i + 1) * step:
-            # the loss function just wants the index of the correct class
-            if get_class:
-                return i
-            res[i] = 1
-            break
-    if get_class:
-        # if have an outlier, we add it to lowest or highest bin
-        if value < min:
-            return 0
-        else:
-            return num_bins - 1
-
-    return res
-
-
-def one_hot_wrap(arr):
-    # take one hot of the first to values of the array and return these class numbers as an array
-    angle_label = one_hot(arr[0], -0.04, 0.04, angle_bins, get_class=True)
-    speed_label = one_hot(arr[1], 0.0, 0.4, speed_bins, get_class=True)
-    return np.array([angle_label, speed_label])
-
-
-
-num_steps = 25
-# from https://github.com/LeanManager/NLP-PyTorch/blob/master/Character-Level%20LSTM%20with%20PyTorch.ipynb
-def get_batches(files, num_files, n_steps):
-    '''
-    Create a list of batches of size
-       num_files x n_steps x inputsize
-       from the files
-
-       num_files is our batch size, the number of sequences per batch
-       n_steps is the length of each sequence in a batch
-       inputsize is just the length of our handcrafted vector
-
-    '''
-
-    #get the data and append it to the array
-    arr = []
-    for i in range(num_files):
-        gc = Guppy_Calculator(files[i], agent, num_guppy_bins, num_wall_rays, livedata=False)
-        data = gc.get_data_old()
-        # print(data.shape)
-        arr.append(data)
-
-    # array has size (num_files, len(track)=750, input_dim)
-    arr = np.array(arr)
-
-    batch_size = num_files * n_steps
-    n_batches = len(arr) // batch_size
-
-    # Keep only enough characters to make full batches
-    # arr = arr[:n_batches * batch_size]
-
-    res = []
-    for n in range(0, arr.shape[1], n_steps):
-
-        # The features
-        x = arr[:, n:n + n_steps, :]
-        #x = arr[:, : n_steps, :]
-
-        # The targets, shifted by one
-        y = np.zeros_like(x)
-
-        # shift the targets
-        try:
-            y[:, :-1, :], y[:, -1, :] = x[:, 1:, :], arr[:, n + n_steps, :]
-            #y[:, :-1, :], y[:, -1, :] = x[:, 1:, :], arr[:,  n_steps, :]
-        except IndexError:
-            y[:, :-1, :], y[:, -1, :] = x[:, 1:, :], arr[:, n + n_steps - 2, :]
-            #y[:, :-1, :], y[:, -1, :] = x[:, 1:, :], arr[:, n_steps - 1, :]
-
-        res.append((torch.from_numpy(x), torch.from_numpy(np.apply_along_axis(one_hot_wrap, 2, y))))
-
-    return res
-
-
-# inspired by https://github.com/LeanManager/NLP-PyTorch/blob/master/Character-Level%20LSTM%20with%20PyTorch.ipynb
-# TODO: Klassifizierung vs Regression
-# TODO: Prediction, Training Error!
-class LSTM(nn.Module):
-    def __init__(self, input_size=input_dim, hidden_layer_size=hidden_layer_size, output_size=output_dim, num_seqs=num_files):
-        # output size has to be the number of bins for first loc vec component + for the second
-        super().__init__()
-        self.hidden_layer_size = hidden_layer_size
-
-        self.lstm = nn.LSTM(input_size, hidden_layer_size, num_layers, batch_first=True)
-
-        #self.linear1 = nn.Linear(hidden_layer_size, angle_bins)
-        #self.linear2 = nn.Linear(hidden_layer_size, speed_bins)
-
-        #predict the two components
-        self.linear = nn.Linear(hidden_layer_size, 2)
-
-        self.hidden_cell = (torch.zeros(1, 1, self.hidden_layer_size),
-                            torch.zeros(1, 1, self.hidden_layer_size))
-
-    def forward(self, x, hc):
-        # print("Input seq: ", input_seq.view(1,1,len(input_seq)))
-        # print("Hidden Cell: ", self.hidden_cell)
-
-        x, (h, c) = self.lstm(x, hc)
-
-        #angle_out = self.linear1(x)
-        #speed_out = self.linear2(x)
-
-        out = self.linear(x)
-
-        return out, (h, c)
-
-        #return angle_out, speed_out, (h, c)
-
-    def predict(self, test_ex, hc):
-        # not ready
-        x, (h, c) = self.lstm(test_ex, hc)
-        angle_out = self.linear1(x)
-        speed_out = self.linear2(x)
-        m = nn.Softmax(dim=1)
-        angle_pred = m(angle_out)
-        speed_pred = m(speed_out)
-
-    def init_hidden(self, batch_size, num_layers):
-        ''' Initializes hidden state '''
-        # Create two new tensors with sizes n_layers x n_seqs x n_hidden,
-        # initialized to zero, for hidden state and cell state of LSTM
-        weight = next(self.parameters()).data
-        return (weight.new(num_layers, batch_size, self.hidden_layer_size).zero_(),
-                weight.new(num_layers, batch_size, self.hidden_layer_size).zero_())
 
 
 torch.set_default_dtype(torch.float64)
@@ -178,14 +46,16 @@ model = LSTM()
 # now we use a regression model, just predict the absolute values of linear speed and angular turn
 # so we need squared_error loss
 loss_function = nn.MSELoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=0.1)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.005)
 print(model)
 # training
-epochs = 200
-batch_size = 8
+epochs = 100
+batch_size = 4
+#PATH = "guppy_net.pth"
+PATH = "guppy_net_live.pth"
 
-dataset = Guppy_Dataset(files, 0, num_guppy_bins, num_wall_rays, livedata=False)
-dataloader = DataLoader(dataset, batch_size=batch_size, drop_last=True)
+dataset = Guppy_Dataset(files, 0, num_guppy_bins, num_wall_rays, livedata=True)
+dataloader = DataLoader(dataset, batch_size=batch_size, drop_last=True, shuffle=True)
 
 """
 for i, batch in enumerate(dataloader):
@@ -207,9 +77,85 @@ for i in range(epochs):
 
         loss = loss_function(prediction, targets)
         loss.backward()
-        optimizer.step()
 
-    print(f'epoch: {i:3} loss: {loss.item():10.10f}')
+
+
+
+
+#             if get_class:
+#                 return i
+#             res[i] = 1
+#             break
+#     if get_class:
+#         # if have an outlier, we add it to lowest or highest bin
+#         if value < min:
+#             return 0
+#         else:
+#             return num_bins - 1
+#
+#     return res
+#
+#
+# def one_hot_wrap(arr):
+#     # take one hot of the first to values of the array and return these class numbers as an array
+#     angle_label = one_hot(arr[0], -0.04, 0.04, angle_bins, get_class=True)
+#     speed_label = one_hot(arr[1], 0.0, 0.4, speed_bins, get_class=True)
+#     return np.array([angle_label, speed_label])
+#
+#
+#
+# num_steps = 25
+# # from https://github.com/LeanManager/NLP-PyTorch/blob/master/Character-Level%20LSTM%20with%20PyTorch.ipynb
+# def get_batches(files, num_files, n_steps):
+#     '''
+#     Create a list of batches of size
+#        num_files x n_steps x inputsize
+#        from the files
+#
+#        num_files is our batch size, the number of sequences per batch
+#        n_steps is the length of each sequence in a batch
+#        inputsize is just the length of our handcrafted vector
+#
+#     '''
+#
+#     #get the data and append it to the array
+#     arr = []
+#     for i in range(num_files):
+#         gc = Guppy_Calculator(files[i], agent, num_guppy_bins, num_wall_rays, livedata=False)
+#         data = gc.get_data_old()
+#         # print(data.shape)
+#         arr.append(data)
+#
+#     # array has size (num_files, len(track)=750, input_dim)
+#     arr = np.array(arr)
+#
+#     batch_size = num_files * n_steps
+#     n_batches = len(arr) // batch_size
+#
+#     # Keep only enough characters to make full batches
+#     # arr = arr[:n_batches * batch_size]
+#
+#     res = []
+#     for n in range(0, arr.shape[1], n_steps):
+#
+#         # The features
+#         x = arr[:, n:n + n_steps, :]
+#         #x = arr[:, : n_steps, :]
+#
+#         # The targets, shifted by one
+#         y = np.zeros_like(x)
+#
+#         # shift the targets
+#         try:
+#             y[:, :-1, :], y[:, -1, :] = x[:, 1:, :], arr[:, n + n_steps, :]
+#             #y[:, :-1, :], y[:, -1, :] = x[:, 1:, :], arr[:,  n_steps, :]
+#         except IndexError:
+#             y[:, :-1, :], y[:, -1, :] = x[:, 1:, :], arr[:, n + n_steps - 2, :]
+#             #y[:, :-1, :], y[:, -1, :] = x[:, 1:, :], arr[:, n_steps - 1, :]
+#
+#         res.append((torch.from_numpy(x), torch.from_numpy(np.apply_along_axis(one_hot_wrap, 2, y))))
+#
+#     return res
 
 # """
 # data = get_batches(files, num_files, num_steps)
