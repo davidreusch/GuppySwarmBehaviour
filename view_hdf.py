@@ -8,6 +8,7 @@ from descartes.patch import PolygonPatch
 from figures import BLUE, RED, BLACK, YELLOW, SIZE, set_limits, plot_coords, color_isvalid
 from time import perf_counter
 from torch.utils.data import Dataset, DataLoader
+from hyper_params import *
 
 
 # Whole code is inspired by Moritz Maxeiners master thesis and his code for the thesis
@@ -113,6 +114,25 @@ def ray_intersection(x, a):
     print("ERROR: no intersection point found!")
     return -1, -1
 
+def get_bin(value, min, max, num_bins):
+    step = (max - min) / num_bins
+    # res = np.zeros(num_bins)
+    for i in range(num_bins):
+        if min + i * step <= value < min + (i + 1) * step:
+            # the loss function just wants the index of the correct class
+            return i
+    if value < min:
+        return 0
+    elif value > max:
+        return num_bins - 1
+    else:
+        return print("ERROR no bin found")
+
+ #def one_hot_wrap(arr):
+ #    # take one hot of the first to values of the array and return these class numbers as an array
+ #    angle_label = get_bin(arr[0], -0.04, 0.04, angle_bins)
+ #    speed_label = get_bin(arr[1], 0.0, 0.4, speed_bins)
+ #    return numpy.array([angle_label, speed_label])
 
 # thats the main class, its run method will do all the work
 class Guppy_Calculator():
@@ -150,16 +170,9 @@ class Guppy_Calculator():
         self.others = None
         self.loc_vec = None
 
-    def get_data_old(self):
-        out = []
-        for i in range( len(self.agent_data)):
-            out.append(self.craft_vector(i))
-        return out
-
     def get_data(self):
         sensory = []
         loc = []
-        res = []
         for i in range(1, len(self.agent_data)):
             loc.append(self.get_loc_vec(i))
             sensory.append(self.craft_vector(i))
@@ -333,7 +346,7 @@ class Guppy_Calculator():
 
 class Guppy_Dataset(Dataset):
 
-    def __init__(self, filepaths, agent, num_bins, num_rays, livedata):
+    def __init__(self, filepaths, agent, num_bins, num_rays, livedata, output_model):
         self.livedata = livedata
         self.num_rays = num_rays
         self.num_view_bins = num_bins
@@ -345,6 +358,11 @@ class Guppy_Dataset(Dataset):
             gc = Guppy_Calculator(self.filepaths[i], self.agent, self.num_view_bins, self.num_rays, self.livedata)
             x_loc, x_sensory = gc.get_data()
             y_loc = numpy.roll(x_loc, -1, 0)
+            if output_model == ("multi_modal"):
+                for i in range(y_loc.shape[0]):
+                    y_loc[i,0] = get_bin(y_loc[i,0], angle_min, angle_max, num_angle_bins)
+                    y_loc[i, 1] = get_bin(y_loc[i, 1], speed_min, speed_max, num_speed_bins)
+
             self.data.append((numpy.concatenate((x_loc[:-1, :], x_sensory[:-1, :]), 1), y_loc[:-1, :]))
 
     def __len__(self):
@@ -352,6 +370,7 @@ class Guppy_Dataset(Dataset):
 
     def __getitem__(self, i):
         return self.data[i]
+
 
 
 if __name__ == "__main__":

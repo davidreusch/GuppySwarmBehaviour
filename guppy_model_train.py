@@ -12,19 +12,10 @@ from torch.utils.data import Dataset, DataLoader
 from guppy_model import LSTM
 import sys
 import copy
+from hyper_params import *
 
 torch.manual_seed(1)
 
-# Parameters:
-num_guppy_bins = 20
-num_wall_rays = 20
-input_dim = num_guppy_bins + num_wall_rays + 2
-agent = 0
-angle_bins = 10
-speed_bins = 2  # take only 2 bins for the speed data which is constant in the simulated data
-output_dim = angle_bins + speed_bins
-num_layers = 2
-hidden_layer_size = 200
 
 # get the files for 4, 6 and 8 guppys
 mypath = "guppy_data/couzin_torus/train/"
@@ -34,37 +25,31 @@ files = [join(mypath, f) for f in listdir(mypath) if
 
 #files = [join(mypath, f) for f in listdir(mypath) if isfile(join(mypath, f))]
 files.sort()
-num_files = len(files)
+num_files = len(files) // 10
 files = files[:num_files]
 print(files)
 
 
 torch.set_default_dtype(torch.float64)
 model = LSTM()
-#loss_function = nn.CrossEntropyLoss()
 
 # now we use a regression model, just predict the absolute values of linear speed and angular turn
 # so we need squared_error loss
-loss_function = nn.MSELoss()
+
+if output_model == "multi-modal":
+    loss_function = nn.CrossEntropyLoss()
+else:
+    loss_function = nn.MSELoss()
+
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 print(model)
 # training
 epochs = 200
-batch_size = 4
-#PATH = "guppy_net.pth"
-PATH = "guppy_net_live.pth"
+PATH = "guppy_net.pth"
+#PATH = "guppy_net_live.pth"
 
-dataset = Guppy_Dataset(files, 0, num_guppy_bins, num_wall_rays, livedata=False)
+dataset = Guppy_Dataset(files, 0, num_guppy_bins, num_wall_rays, livedata=False, output_model=output_model)
 dataloader = DataLoader(dataset, batch_size=batch_size, drop_last=True, shuffle=True)
-
-"""
-for i, batch in enumerate(dataloader):
-    if i > 10: break
-    print(batch[0].size())
-    print(batch[1].size())
-    print(batch[2].size())
-    print(batch)
-"""
 
 for i in range(epochs):
     h = model.init_hidden(batch_size, num_layers)
@@ -75,34 +60,21 @@ for i in range(epochs):
         h = tuple([each.data for each in h])
         prediction, h = model.forward(inputs, h)
 
-        loss = loss_function(prediction, targets)
+        if output_model == "multi-modal":
+            loss = loss_function(prediction.view(batch_size * prediction.shape[1], ))
+
+        else:
+            loss = loss_function(prediction, targets)
         loss.backward()
         optimizer.step()
 
     print(f'epoch: {i:3} loss: {loss.item():10.10f}')
 
-torch.save(model.state_dict(), PATH)
+#torch.save(model.state_dict(), PATH)
 
-#             if get_class:
-#                 return i
-#             res[i] = 1
-#             break
-#     if get_class:
-#         # if have an outlier, we add it to lowest or highest bin
-#         if value < min:
-#             return 0
-#         else:
-#             return num_bins - 1
-#
-#     return res
-#
-#
-# def one_hot_wrap(arr):
-#     # take one hot of the first to values of the array and return these class numbers as an array
-#     angle_label = one_hot(arr[0], -0.04, 0.04, angle_bins, get_class=True)
-#     speed_label = one_hot(arr[1], 0.0, 0.4, speed_bins, get_class=True)
-#     return np.array([angle_label, speed_label])
-#
+
+
+
 #
 #
 # num_steps = 25

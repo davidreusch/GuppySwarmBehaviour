@@ -1,16 +1,6 @@
 import torch.nn as nn
 from view_hdf import vec_to_angle
-
-num_guppy_bins = 20
-num_wall_rays = 20
-input_dim = num_guppy_bins + num_wall_rays + 2
-agent = 0
-angle_bins = 10
-speed_bins = 2  # take only 2 bins for the speed data which is constant in the simulated data
-output_dim = angle_bins + speed_bins
-num_layers = 1
-hidden_layer_size = 100
-batch_size = 4
+from hyper_params import *
 
 loss_function = nn.MSELoss()
 
@@ -26,8 +16,8 @@ class LSTM(nn.Module):
 
         self.lstm = nn.LSTM(input_size, hidden_layer_size, num_layers, batch_first=True)
 
-        # self.linear1 = nn.Linear(hidden_layer_size, angle_bins)
-        # self.linear2 = nn.Linear(hidden_layer_size, speed_bins)
+        self.linear1 = nn.Linear(hidden_layer_size, num_angle_bins)
+        self.linear2 = nn.Linear(hidden_layer_size, num_speed_bins)
 
         # predict the two components
         self.linear = nn.Linear(hidden_layer_size, 2)
@@ -42,7 +32,11 @@ class LSTM(nn.Module):
         # angle_out = self.linear1(x)
         # speed_out = self.linear2(x)
 
+        #if output_model == "multi-modal":
+
         out = self.linear(x)
+
+
 
         self.hidden_state = h, c
 
