@@ -27,12 +27,19 @@ def vec_to_angle(x, y):
 
 max_dist = 70
 
+def ang_diff(source, target):
+    a = target - source
+    a = a - 2*pi if a > pi else (a + 2*pi if a < -pi else a)
+    return a
 
 # map distance to value in range(0,1) - greater distance -> lesser intensity (from Moritz Maxeiner)
 def intensity_linear(distance):
     if distance < 0 or max_dist < distance:
         return 0
     return 1 - float(distance) / max_dist
+
+def intensity_angular(ang_diff):
+    return 1 - float(ang_diff)/pi
 
 
 def addCorner(p1, p2):
@@ -56,7 +63,8 @@ def get_locomotion_vec(data_prev, data_cur):
     if data_prev is None:
         return 0, 0
     else:
-        ang_turn = vec_to_angle(data_prev[2], data_prev[3]) - vec_to_angle(data_cur[2], data_cur[3])
+        #ang_turn = vec_to_angle(data_prev[2], data_prev[3]) - vec_to_angle(data_cur[2], data_cur[3])
+        ang_turn = ang_diff(vec_to_angle(data_prev[2], data_prev[3]) , vec_to_angle(data_cur[2], data_cur[3]))
         diff_vec = ((data_cur[0] - data_prev[0]), (data_cur[1] - data_prev[1]))
         linear_speed = dot_product(diff_vec, (data_cur[2], data_cur[3]))
         return ang_turn, linear_speed
@@ -85,16 +93,16 @@ def ray_intersection(x, a):
     s = sin(a)
     # if we have a case where cos or sin are close to 0, we can immediately return some value
     if abs(c) < 0.0001:
-        print('edge case: angle almost 90 or 270')
+        #print('edge case: angle almost 90 or 270')
         if a > 0:
             return x[0], 100
         else:
             return x[0], 0
     elif abs(a) < 0.0001:
-        print('edge case: angle very small')
+        #print('edge case: angle very small')
         return 100, x[1]
     elif abs(abs(a) - pi) < 0.0001:
-        print('edge case: angle almost 180')
+        #print('edge case: angle almost 180')
         return 0, x[1]
 
     # else we iterate through the lines which represent the tank walls
@@ -203,6 +211,8 @@ class Guppy_Calculator():
         # calculate positions of other guppys
         self.others = [(self.data[j][i][0], self.data[j][i][1])
                        for j in range(len(self.ls)) if j != self.agent]
+        self.others_angle = [vec_to_angle(self.data[j][i][2], self.data[j][i][3])
+                             for j in range(len(self.ls)) if j != self.agent]
         # calculate intensity vector wall_view for distance to walls
         self.wall_distances()
         # calculate intensity vector agent_view for distance to nearby guppies
@@ -210,9 +220,16 @@ class Guppy_Calculator():
         # loc_vec[0] = angular turn; loc_vec[1] = linear speed
         if self.simulation:
             self.loc_vec = get_locomotion_vec(self.agent_data[i - 1], self.agent_data[i])
+
         # we return the vector already concatenated in a numpy_vector
-        #return numpy.concatenate((numpy.array(self.loc_vec), numpy.array(self.agent_view), numpy.array(self.wall_view)))
-        return numpy.concatenate((numpy.array(self.agent_view), numpy.array(self.wall_view)))
+        if include_others_angles:
+            return numpy.concatenate((numpy.array(self.agent_view),
+                                      numpy.array(self.wall_view),
+                                      numpy.array(self.agent_view_angle)))
+        else:
+            return numpy.concatenate((numpy.array(self.agent_view),
+                                      numpy.array(self.wall_view)))
+
 
     def get_loc_vec(self, i):
         return numpy.array(get_locomotion_vec(self.agent_data[i - 1], self.agent_data[i]))
@@ -244,8 +261,10 @@ class Guppy_Calculator():
 
         # loop through the bins and find the closest guppy for each bin
         self.agent_view = [1000.0 for i in range(len(self.bins))]
+        self.agent_view_angle = [0 for i in range(len(self.bins))]
         length = len(self.others)
         others_c = self.others[:]
+        others_ang = self.others_angle[:]
 
         # Variant 1: Start with the bins and delete guppys which already found their bin
         # This seems to be the most efficient
@@ -256,7 +275,12 @@ class Guppy_Calculator():
                     distance = dist(self.obs_pos, others_c[j])
                     if distance < self.agent_view[i]:
                         self.agent_view[i] = distance
+                        ang_dif = abs(self.obs_angle - others_ang[j])
+                        if ang_dif > pi:
+                            ang_dif = 2 * pi - ang_dif
+                        self.agent_view_angle[i] = intensity_angular(ang_dif)
                     del (others_c[j])
+                    del (others_ang[j])
                     length -= 1
                 else:
                     j += 1
@@ -360,7 +384,7 @@ class Guppy_Dataset(Dataset):
             y_loc = numpy.roll(x_loc, -1, 0)
             if output_model == ("multi_modal"):
                 for i in range(y_loc.shape[0]):
-                    y_loc[i,0] = get_bin(y_loc[i,0], angle_min, angle_max, num_angle_bins)
+                    y_loc[i, 0] = get_bin(y_loc[i, 0], angle_min, angle_max, num_angle_bins)
                     y_loc[i, 1] = get_bin(y_loc[i, 1], speed_min, speed_max, num_speed_bins)
 
             self.data.append((numpy.concatenate((x_loc[:-1, :], x_sensory[:-1, :]), 1), y_loc[:-1, :]))

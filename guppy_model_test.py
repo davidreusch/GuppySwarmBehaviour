@@ -6,10 +6,10 @@ from os.path import isfile, join
 from os import listdir
 from view_hdf import Guppy_Dataset
 from torch.utils.data import Dataset, DataLoader
-
+from hyper_params import *
 torch.set_default_dtype(torch.float64)
 PATH = "guppy_net.pth"
-model = LSTM()
+model = LSTM_fixed()
 model.load_state_dict(torch.load(PATH))
 model.eval()
 

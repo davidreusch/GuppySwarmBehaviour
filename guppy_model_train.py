@@ -9,44 +9,43 @@ from view_hdf import get_locomotion_vec, Guppy_Calculator, Guppy_Dataset
 from os import listdir
 from os.path import isfile, join
 from torch.utils.data import Dataset, DataLoader
-from guppy_model import LSTM
+from guppy_model import LSTM_fixed, LSTM_multi_modal
 import sys
 import copy
 from hyper_params import *
 
 torch.manual_seed(1)
 
-
 # get the files for 4, 6 and 8 guppys
 mypath = "guppy_data/couzin_torus/train/"
 livepath = "guppy_data/live_female_female/train/"
 files = [join(mypath, f) for f in listdir(mypath) if
-       isfile(join(mypath, f)) and f[0] == "4" or f[0] == "6" or f[0] == "8"]
+         isfile(join(mypath, f)) and f[0] == "4" or f[0] == "6" or f[0] == "8"]
 
-#files = [join(mypath, f) for f in listdir(mypath) if isfile(join(mypath, f))]
+# files = [join(livepath, f) for f in listdir(livepath) if isfile(join(livepath, f))]
 files.sort()
-num_files = len(files) // 10
+num_files = len(files)
 files = files[:num_files]
 print(files)
 
-
 torch.set_default_dtype(torch.float64)
-model = LSTM()
 
 # now we use a regression model, just predict the absolute values of linear speed and angular turn
 # so we need squared_error loss
 
-if output_model == "multi-modal":
+if output_model == "multi_modal":
+    model = LSTM_multi_modal()
     loss_function = nn.CrossEntropyLoss()
 else:
+    model = LSTM_fixed()
     loss_function = nn.MSELoss()
 
-optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.0005)
 print(model)
 # training
 epochs = 200
 PATH = "guppy_net.pth"
-#PATH = "guppy_net_live.pth"
+# PATH = "guppy_net_live.pth"
 
 dataset = Guppy_Dataset(files, 0, num_guppy_bins, num_wall_rays, livedata=False, output_model=output_model)
 dataloader = DataLoader(dataset, batch_size=batch_size, drop_last=True, shuffle=True)
@@ -58,21 +57,30 @@ for i in range(epochs):
         # we'd backprop through the entire training history
         model.zero_grad()
         h = tuple([each.data for each in h])
-        prediction, h = model.forward(inputs, h)
 
-        if output_model == "multi-modal":
-            loss = loss_function(prediction.view(batch_size * prediction.shape[1], ))
+        if output_model == "multi_modal":
+            targets = targets.type(torch.LongTensor)
+            angle_pred, speed_pred, h = model.forward(inputs, h)
+            angle_pred = angle_pred.view(angle_pred.shape[0] * angle_pred.shape[1], -1)
+            speed_pred = speed_pred.view(speed_pred.shape[0] * speed_pred.shape[1], -1)
+            targets = targets.view(targets.shape[0] * targets.shape[1], 2)
+            angle_targets = targets[:, 0]
+            speed_targets = targets[:, 1]
+
+            loss1 = loss_function(angle_pred, angle_targets)
+            loss2 = loss_function(speed_pred, speed_targets)
+            loss = loss1 + loss2
 
         else:
+            prediction, h = model.forward(inputs, h)
             loss = loss_function(prediction, targets)
+
         loss.backward()
         optimizer.step()
 
     print(f'epoch: {i:3} loss: {loss.item():10.10f}')
 
-#torch.save(model.state_dict(), PATH)
-
-
+# torch.save(model.state_dict(), PATH)
 
 
 #
