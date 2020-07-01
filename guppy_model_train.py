@@ -17,14 +17,10 @@ from hyper_params import *
 torch.manual_seed(1)
 
 # get the files for 4, 6 and 8 guppys
-mypath = "guppy_data/couzin_torus/train/"
-livepath = "guppy_data/live_female_female/train/"
-files = [join(mypath, f) for f in listdir(mypath) if
-         isfile(join(mypath, f)) and f[0] == "4" or f[0] == "6" or f[0] == "8"]
-
-# files = [join(livepath, f) for f in listdir(livepath) if isfile(join(livepath, f))]
+trainpath = "guppy_data/live_female_female/train/" if live_data else "guppy_data/couzin_torus/train/"
+files = [join(trainpath, f) for f in listdir(trainpath) if isfile(join(trainpath, f)) and f.endswith(".hdf5")]
 files.sort()
-num_files = len(files)
+num_files = len(files) // 10
 files = files[:num_files]
 print(files)
 
@@ -47,7 +43,7 @@ epochs = 200
 PATH = "guppy_net.pth"
 # PATH = "guppy_net_live.pth"
 
-dataset = Guppy_Dataset(files, 0, num_guppy_bins, num_wall_rays, livedata=False, output_model=output_model)
+dataset = Guppy_Dataset(files, 0, num_guppy_bins, num_wall_rays, livedata=live_data, output_model=output_model)
 dataloader = DataLoader(dataset, batch_size=batch_size, drop_last=True, shuffle=True)
 
 for i in range(epochs):

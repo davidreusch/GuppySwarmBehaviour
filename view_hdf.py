@@ -9,6 +9,7 @@ from figures import BLUE, RED, BLACK, YELLOW, SIZE, set_limits, plot_coords, col
 from time import perf_counter
 from torch.utils.data import Dataset, DataLoader
 from hyper_params import *
+import os
 
 
 # Whole code is inspired by Moritz Maxeiners master thesis and his code for the thesis
@@ -27,10 +28,12 @@ def vec_to_angle(x, y):
 
 max_dist = 70
 
+
 def ang_diff(source, target):
     a = target - source
-    a = a - 2*pi if a > pi else (a + 2*pi if a < -pi else a)
+    a = a - 2 * pi if a > pi else (a + 2 * pi if a < -pi else a)
     return a
+
 
 # map distance to value in range(0,1) - greater distance -> lesser intensity (from Moritz Maxeiner)
 def intensity_linear(distance):
@@ -38,8 +41,9 @@ def intensity_linear(distance):
         return 0
     return 1 - float(distance) / max_dist
 
+
 def intensity_angular(ang_diff):
-    return 1 - float(ang_diff)/pi
+    return 1 - float(ang_diff) / pi
 
 
 def addCorner(p1, p2):
@@ -63,8 +67,8 @@ def get_locomotion_vec(data_prev, data_cur):
     if data_prev is None:
         return 0, 0
     else:
-        #ang_turn = vec_to_angle(data_prev[2], data_prev[3]) - vec_to_angle(data_cur[2], data_cur[3])
-        ang_turn = ang_diff(vec_to_angle(data_prev[2], data_prev[3]) , vec_to_angle(data_cur[2], data_cur[3]))
+        # ang_turn = vec_to_angle(data_prev[2], data_prev[3]) - vec_to_angle(data_cur[2], data_cur[3])
+        ang_turn = ang_diff(vec_to_angle(data_prev[2], data_prev[3]), vec_to_angle(data_cur[2], data_cur[3]))
         diff_vec = ((data_cur[0] - data_prev[0]), (data_cur[1] - data_prev[1]))
         linear_speed = dot_product(diff_vec, (data_cur[2], data_cur[3]))
         return ang_turn, linear_speed
@@ -93,16 +97,16 @@ def ray_intersection(x, a):
     s = sin(a)
     # if we have a case where cos or sin are close to 0, we can immediately return some value
     if abs(c) < 0.0001:
-        #print('edge case: angle almost 90 or 270')
+        # print('edge case: angle almost 90 or 270')
         if a > 0:
             return x[0], 100
         else:
             return x[0], 0
     elif abs(a) < 0.0001:
-        #print('edge case: angle very small')
+        # print('edge case: angle very small')
         return 100, x[1]
     elif abs(abs(a) - pi) < 0.0001:
-        #print('edge case: angle almost 180')
+        # print('edge case: angle almost 180')
         return 0, x[1]
 
     # else we iterate through the lines which represent the tank walls
@@ -114,13 +118,13 @@ def ray_intersection(x, a):
         elif w[1] == 0:
             lambd = (b[1] - x[1]) / s
 
-
         if lambd >= 0:
             inters = round(lambd * c + x[0], 6), round(lambd * s + x[1], 6)
             if is_in_tank(inters[0], inters[1]):
                 return inters
     print("ERROR: no intersection point found!")
     return -1, -1
+
 
 def get_bin(value, min, max, num_bins):
     step = (max - min) / num_bins
@@ -136,11 +140,12 @@ def get_bin(value, min, max, num_bins):
     else:
         return print("ERROR no bin found")
 
- #def one_hot_wrap(arr):
- #    # take one hot of the first to values of the array and return these class numbers as an array
- #    angle_label = get_bin(arr[0], -0.04, 0.04, angle_bins)
- #    speed_label = get_bin(arr[1], 0.0, 0.4, speed_bins)
- #    return numpy.array([angle_label, speed_label])
+
+# def one_hot_wrap(arr):
+#    # take one hot of the first to values of the array and return these class numbers as an array
+#    angle_label = get_bin(arr[0], -0.04, 0.04, angle_bins)
+#    speed_label = get_bin(arr[1], 0.0, 0.4, speed_bins)
+#    return numpy.array([angle_label, speed_label])
 
 # thats the main class, its run method will do all the work
 class Guppy_Calculator():
@@ -230,7 +235,6 @@ class Guppy_Calculator():
             return numpy.concatenate((numpy.array(self.agent_view),
                                       numpy.array(self.wall_view)))
 
-
     def get_loc_vec(self, i):
         return numpy.array(get_locomotion_vec(self.agent_data[i - 1], self.agent_data[i]))
 
@@ -311,7 +315,6 @@ class Guppy_Calculator():
             self.agent_view[i] = intensity_linear(self.agent_view[i], max_dist)
         """
 
-
     def plot_guppy_bins(self):
         self.ax.cla()  # clear axes
 
@@ -378,23 +381,40 @@ class Guppy_Dataset(Dataset):
         self.length = len(filepaths)
         self.filepaths = filepaths
         self.data = []
-        for i in range(self.length):
-            gc = Guppy_Calculator(self.filepaths[i], self.agent, self.num_view_bins, self.num_rays, self.livedata)
-            x_loc, x_sensory = gc.get_data()
-            y_loc = numpy.roll(x_loc, -1, 0)
-            if output_model == ("multi_modal"):
-                for i in range(y_loc.shape[0]):
-                    y_loc[i, 0] = get_bin(y_loc[i, 0], angle_min, angle_max, num_angle_bins)
-                    y_loc[i, 1] = get_bin(y_loc[i, 1], speed_min, speed_max, num_speed_bins)
+        self.datapaths = []
+        self.labelpaths = []
 
-            self.data.append((numpy.concatenate((x_loc[:-1, :], x_sensory[:-1, :]), 1), y_loc[:-1, :]))
+        for i in range(self.length):
+            datapath = self.filepaths[i]
+            datapath += "data.multi_modal.npy" if output_model == "multi_modal" else "data.fixed.npy"
+            labelpath = self.filepaths[i]
+            labelpath += "label.multi_modal.npy" if output_model == "multi_modal" else "label.fixed.npy"
+            if not os.path.isfile(datapath):
+                gc = Guppy_Calculator(self.filepaths[i], self.agent, self.num_view_bins, self.num_rays, self.livedata)
+                x_loc, x_sensory = gc.get_data()
+                y_loc = numpy.roll(x_loc, -1, 0)
+                if output_model == ("multi_modal"):
+                    for i in range(y_loc.shape[0]):
+                        y_loc[i, 0] = get_bin(y_loc[i, 0], angle_min, angle_max, num_angle_bins)
+                        y_loc[i, 1] = get_bin(y_loc[i, 1], speed_min, speed_max, num_speed_bins)
+
+                numpy.save(datapath, numpy.concatenate((x_loc[:-1, :], x_sensory[:-1, :]), 1))
+                numpy.save(labelpath, y_loc[:-1, :])
+            self.datapaths.append(datapath)
+            self.labelpaths.append(labelpath)
+
+        #    self.data.append((numpy.concatenate((x_loc[:-1, :], x_sensory[:-1, :]), 1), y_loc[:-1, :]))
+
 
     def __len__(self):
         return self.length
 
     def __getitem__(self, i):
-        return self.data[i]
+        data = numpy.load(self.datapaths[i])
+        labels = numpy.load(self.labelpaths[i])
+        return data, labels
 
+        # return self.data[i]
 
 
 if __name__ == "__main__":
