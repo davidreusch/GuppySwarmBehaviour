@@ -191,6 +191,18 @@ class Guppy_Calculator():
             sensory.append(self.craft_vector(i))
         return numpy.array(loc), numpy.array(sensory)
 
+    def get_min_max_angle_speed(self):
+        angle, speed = self.get_loc_vec(1)
+        min_angle = max_angle = angle
+        min_speed = max_speed = speed
+        for i in range(2, len(self.agent_data)):
+            angle, speed = self.get_loc_vec(i)
+            min_angle = angle if angle < min_angle else min_angle
+            max_angle = angle if angle > max_angle else max_angle
+            min_speed = speed if speed < min_speed else min_speed
+            max_speed = speed if speed > max_speed else max_speed
+        return min_angle, max_angle, min_speed, max_speed
+
     def preprocess(self):
         new_path = self.filepath + ".npy"
         input = numpy.zeros((len(self.agent_data), 2 + self.num_bins + self.num_rays))

@@ -13,25 +13,14 @@ class LSTM_fixed(nn.Module):
         # output size has to be the number of bins for first loc vec component + for the second
         super().__init__()
         self.hidden_layer_size = hidden_layer_size
-
         self.lstm = nn.LSTM(input_size, hidden_layer_size, num_layers, batch_first=True)
-
-
         # predict the two components
         self.linear = nn.Linear(hidden_layer_size, 2)
-        self.hidden_state = self.init_hidden(batch_size, num_layers)
 
     def forward(self, x, hc):
-        # print("Input seq: ", input_seq.view(1,1,len(input_seq)))
-        # print("Hidden Cell: ", self.hidden_cell)
-
         x, (h, c) = self.lstm(x, hc)
-
         out = self.linear(x)
-
         return out, (h, c)
-
-    # return angle_out, speed_out, (h, c)
 
     def predict(self, test_ex, label):
         # not ready
@@ -42,8 +31,6 @@ class LSTM_fixed(nn.Module):
 
     def init_hidden(self, batch_size, num_layers):
         ''' Initializes hidden state '''
-        # Create two new tensors with sizes n_layers x n_seqs x n_hidden,
-        # initialized to zero, for hidden state and cell state of LSTM
         weight = next(self.parameters()).data
         return (weight.new(num_layers, batch_size, self.hidden_layer_size).zero_(),
                 weight.new(num_layers, batch_size, self.hidden_layer_size).zero_())
@@ -70,14 +57,9 @@ class LSTM_multi_modal(nn.Module):
         self.hidden_state = self.init_hidden(batch_size, num_layers)
 
     def forward(self, x, hc):
-        # print("Input seq: ", input_seq.view(1,1,len(input_seq)))
-        # print("Hidden Cell: ", self.hidden_cell)
-
         x, (h, c) = self.lstm(x, hc)
-
         angle_out = self.linear1(x)
         speed_out = self.linear2(x)
-
         return angle_out, speed_out, (h, c)
 
 
@@ -90,8 +72,6 @@ class LSTM_multi_modal(nn.Module):
 
     def init_hidden(self, batch_size, num_layers):
         ''' Initializes hidden state '''
-        # Create two new tensors with sizes n_layers x n_seqs x n_hidden,
-        # initialized to zero, for hidden state and cell state of LSTM
         weight = next(self.parameters()).data
         return (weight.new(num_layers, batch_size, self.hidden_layer_size).zero_(),
                 weight.new(num_layers, batch_size, self.hidden_layer_size).zero_())
