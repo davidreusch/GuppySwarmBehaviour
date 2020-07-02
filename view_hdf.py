@@ -93,6 +93,12 @@ def ray_intersection(x, a):
     # lambda * cos(a) + x1 = mu * w1 + b1
     # lambda * sin(a) + x2 = mu * w2 + b2
     # x = (x.x, x.y)
+    x = list(x)
+    x[0] = abs(x[0])
+    x[1] = abs(x[1])
+    x[0] = 100 if x[0] > 100 else x[0]
+    x[1] = 100 if x[1] > 100 else x[1]
+    a = a % (2*pi)
     c = cos(a)
     s = sin(a)
     # if we have a case where cos or sin are close to 0, we can immediately return some value
@@ -102,12 +108,15 @@ def ray_intersection(x, a):
             return x[0], 100
         else:
             return x[0], 0
-    elif abs(a) < 0.0001:
+    #elif abs(a) < 0.0001:
+    elif abs(s) < 0.0001:
+        if abs(a) < 0.9:
         # print('edge case: angle very small')
-        return 100, x[1]
-    elif abs(abs(a) - pi) < 0.0001:
+            return 100, x[1]
+    #elif abs(abs(a) - pi) < 0.0001:
+        else:
         # print('edge case: angle almost 180')
-        return 0, x[1]
+            return 0, x[1]
 
     # else we iterate through the lines which represent the tank walls
     # and search the intersection point with the line given by position and orientation-angle of the agent
@@ -123,22 +132,36 @@ def ray_intersection(x, a):
             if is_in_tank(inters[0], inters[1]):
                 return inters
     print("ERROR: no intersection point found!")
+    print("Position: ", x[0], x[1])
+    print("Orientation: ", a)
+    print("cos(a): ", c, " sin(a): ) ", s)
     return -1, -1
 
 
 def get_bin(value, min, max, num_bins):
-    step = (max - min) / num_bins
-    # res = np.zeros(num_bins)
-    for i in range(num_bins):
-        if min + i * step <= value < min + (i + 1) * step:
-            # the loss function just wants the index of the correct class
-            return i
     if value < min:
         return 0
     elif value > max:
         return num_bins - 1
-    else:
-        return print("ERROR no bin found")
+    value = value - min
+    max = max - min
+    step = max / (num_bins - 2)
+    bin = floor(value / step) + 1
+    return bin
+    #
+    # step = (max - min) / (num_bins - 2)
+    # for i in range(num_bins - 2):
+    #     if min + i * step <= value < min + (i+1) * step:
+    #         # the loss function just wants the index of the correct class
+    #         return i + 1
+    # if value < min:
+    #     return 0
+    # elif value >= max:
+    #     return num_bins - 1
+    # # There is still some error because this path would be taken sometimes -> sth numerical?
+    # #else:
+    # #    return print("ERROR no bin found")
+    #
 
 
 # def one_hot_wrap(arr):
@@ -431,6 +454,6 @@ class Guppy_Dataset(Dataset):
 
 if __name__ == "__main__":
     filepath = "guppy_data/couzin_torus/train/8_0002.hdf5"
-    filepathlive = "guppy_data/live_female_female/train/CameraCapture2019-06-20T15_35_23_672-sub_1.hdf5"
+    filepathlive = "guppy_data/live_female_female/train/CameraCapture2019-06-28T15_40_01_9052-sub_3.hdf5"
     gc = Guppy_Calculator(filepathlive, agent=0, num_guppy_bins=20, num_wall_rays=5, livedata=True, simulation=True)
     gc.run_sim(step=1)
