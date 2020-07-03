@@ -162,27 +162,22 @@ def get_bin(value, min, max, num_bins):
     step = max / (num_bins - 2)
     bin = floor(value / step) + 1
     return bin
-    #
-    # step = (max - min) / (num_bins - 2)
-    # for i in range(num_bins - 2):
-    #     if min + i * step <= value < min + (i+1) * step:
-    #         # the loss function just wants the index of the correct class
-    #         return i + 1
-    # if value < min:
-    #     return 0
-    # elif value >= max:
-    #     return num_bins - 1
-    # # There is still some error because this path would be taken sometimes -> sth numerical?
-    # #else:
-    # #    return print("ERROR no bin found")
-    #
+
+def normalize_ori(ori):
+    if ori[0] > 1: ori[0] = 1
+    if ori[0] < -1: ori[0] = -1
+    if ori[1] > 1: ori[1] = 1
+    if ori[1] < -1: ori[1] = -1
+    return ori
+
+def normalize_pos(pos):
+    if pos[0] < 0: pos[0] = 0
+    if pos[1] < 0: pos[1] = 0
+    if pos[0] > 100: pos[0] = 100
+    if pos[1] > 100: pos[1] = 100
+    return pos
 
 
-# def one_hot_wrap(arr):
-#    # take one hot of the first to values of the array and return these class numbers as an array
-#    angle_label = get_bin(arr[0], -0.04, 0.04, angle_bins)
-#    speed_label = get_bin(arr[1], 0.0, 0.4, speed_bins)
-#    return numpy.array([angle_label, speed_label])
 
 # thats the main class, its run method will do all the work
 class Guppy_Calculator():
@@ -262,14 +257,13 @@ class Guppy_Calculator():
                     # normally the rotation of a normalized vector by a normalized vector should again be a
                     # normalized vector, but it seems there are some numerical errors, so normalize the orientation
                     # again
-                    if new_ori[0] > 1: new_ori[0] = 1
-                    if new_ori[0] < -1: new_ori[0] = -1
-                    if new_ori[1] > 1: new_ori[1] = 1
-                    if new_ori[1] < -1: new_ori[1] = -1
+                    normalize_ori(new_ori)
 
                     # multiply new orientation by linear speed and add to old position
                     translation_vec = scalar_mul(lin_speed, new_ori)
                     new_pos = vec_add(agent_pos, translation_vec)
+                    # network does not learn the tank walls properly sometimes, let fish bump against the wall
+                    normalize_pos(new_pos)
 
                     #update the position for the next timestep
                     self.data[agent][i+1][0], self.data[agent][i+1][1] = new_pos
