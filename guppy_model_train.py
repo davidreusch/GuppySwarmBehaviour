@@ -20,8 +20,8 @@ torch.manual_seed(1)
 trainpath = "guppy_data/live_female_female/train/" if live_data else "guppy_data/couzin_torus/train/"
 files = [join(trainpath, f) for f in listdir(trainpath) if isfile(join(trainpath, f)) and f.endswith(".hdf5")]
 files.sort()
-num_files = len(files) // 2
-files = files[num_files:]
+num_files = len(files)
+files = files[:num_files]
 print(files)
 
 torch.set_default_dtype(torch.float64)

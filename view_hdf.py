@@ -178,10 +178,11 @@ class Guppy_Calculator():
         self.filepath = filepath
         with h5py.File(filepath, "r") as hdf_file:
             self.ls = list(hdf_file.keys())
+            self.num_guppys = len(self.ls)
             if not livedata:
-                self.data = [numpy.array(hdf_file.get("{}".format(i))) for i in range(len(self.ls))]
+                self.data = [numpy.array(hdf_file.get("{}".format(i))) for i in range(self.num_guppys)]
             else:
-                self.data = [numpy.array(hdf_file.get("{}".format(i + 1))) for i in range(len(self.ls))]
+                self.data = [numpy.array(hdf_file.get("{}".format(i + 1))) for i in range(self.num_guppys)]
             self.agent = agent
             self.agent_data = self.data[agent]
 
@@ -206,12 +207,14 @@ class Guppy_Calculator():
         self.others = None
         self.loc_vec = None
 
-    def get_data(self):
+    def get_data(self, agent):
+        self.agent_data = self.data[agent]
+        self.length = len(self.agent_data)
         sensory = []
         loc = []
         for i in range(1, len(self.agent_data)):
             loc.append(self.get_loc_vec(i))
-            sensory.append(self.craft_vector(i))
+            sensory.append(self.craft_vector(i, agent))
         return numpy.array(loc), numpy.array(sensory)
 
     def get_min_max_angle_speed(self):
@@ -240,7 +243,7 @@ class Guppy_Calculator():
         # for i in numpy.load(new_path):
         #    print(i)
 
-    def craft_vector(self, i):
+    def craft_vector(self, i, agent):
         """calculate the vector v = (locomotion, agent_view, wall_view) from the raw data"""
         # get position of guppy 0 and convert it to sympy point
         self.obs_pos = (self.agent_data[i][0], self.agent_data[i][1])
@@ -250,9 +253,9 @@ class Guppy_Calculator():
         self.obs_angle = vec_to_angle(self.obs_ori[0], self.obs_ori[1])
         # calculate positions of other guppys
         self.others = [(self.data[j][i][0], self.data[j][i][1])
-                       for j in range(len(self.ls)) if j != self.agent]
+                       for j in range(self.num_guppys) if j != agent]
         self.others_angle = [vec_to_angle(self.data[j][i][2], self.data[j][i][3])
-                             for j in range(len(self.ls)) if j != self.agent]
+                             for j in range(self.num_guppys) if j != agent]
         # calculate intensity vector wall_view for distance to walls
         self.wall_distances()
         # calculate intensity vector agent_view for distance to nearby guppies
@@ -413,30 +416,34 @@ class Guppy_Dataset(Dataset):
         self.num_rays = num_rays
         self.num_view_bins = num_bins
         self.agent = agent
-        self.length = len(filepaths)
+        #self.length = len(filepaths)
+        self.length = 0
         self.filepaths = filepaths
         self.data = []
         self.datapaths = []
         self.labelpaths = []
 
-        for i in range(self.length):
+        for i in range(len(filepaths)):
             datapath = self.filepaths[i]
-            datapath += "data.multi_modal.npy" if output_model == "multi_modal" else "data.fixed.npy"
+            datapath += "data.multi_modal" if output_model == "multi_modal" else "data.fixed"
             labelpath = self.filepaths[i]
-            labelpath += "label.multi_modal.npy" if output_model == "multi_modal" else "label.fixed.npy"
-            if not os.path.isfile(datapath):
-                gc = Guppy_Calculator(self.filepaths[i], self.agent, self.num_view_bins, self.num_rays, self.livedata)
-                x_loc, x_sensory = gc.get_data()
-                y_loc = numpy.roll(x_loc, -1, 0)
-                if output_model == ("multi_modal"):
-                    for i in range(y_loc.shape[0]):
-                        y_loc[i, 0] = get_bin(y_loc[i, 0], angle_min, angle_max, num_angle_bins)
-                        y_loc[i, 1] = get_bin(y_loc[i, 1], speed_min, speed_max, num_speed_bins)
-
-                numpy.save(datapath, numpy.concatenate((x_loc[:-1, :], x_sensory[:-1, :]), 1))
-                numpy.save(labelpath, y_loc[:-1, :])
-            self.datapaths.append(datapath)
-            self.labelpaths.append(labelpath)
+            labelpath += "label.multi_modal" if output_model == "multi_modal" else "label.fixed"
+            gc = Guppy_Calculator(self.filepaths[i], self.agent, self.num_view_bins, self.num_rays, self.livedata)
+            self.length += gc.num_guppys
+            for agent in range(gc.num_guppys):
+                final_data_path = datapath + "ag" + str(agent) + ".npy"
+                final_label_path = labelpath + "ag" + str(agent) + ".npy"
+                if not os.path.isfile(final_data_path):
+                    x_loc, x_sensory = gc.get_data(agent)
+                    y_loc = numpy.roll(x_loc, -1, 0)
+                    if output_model == ("multi_modal"):
+                        for i in range(y_loc.shape[0]):
+                            y_loc[i, 0] = get_bin(y_loc[i, 0], angle_min, angle_max, num_angle_bins)
+                            y_loc[i, 1] = get_bin(y_loc[i, 1], speed_min, speed_max, num_speed_bins)
+                    numpy.save(final_data_path, numpy.concatenate((x_loc[:-1, :], x_sensory[:-1, :]), 1))
+                    numpy.save(final_label_path, y_loc[:-1, :])
+                self.datapaths.append(final_data_path)
+                self.labelpaths.append(final_label_path)
 
         #    self.data.append((numpy.concatenate((x_loc[:-1, :], x_sensory[:-1, :]), 1), y_loc[:-1, :]))
 

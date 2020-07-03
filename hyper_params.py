@@ -6,10 +6,10 @@ num_guppy_bins = 20
 num_wall_rays = 20
 input_dim = num_guppy_bins + num_wall_rays + 2
 input_dim += num_guppy_bins if include_others_angles else 0
+agent = 0
 
 
 # for multimodal
-agent = 0
 num_angle_bins = 40
 num_speed_bins = 40  # take only 2 bins for the speed data which is constant in the simulated data
 angle_min = -2
