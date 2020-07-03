@@ -1,7 +1,7 @@
 from math import pi
 # data
 include_others_angles = True
-live_data = True
+live_data = False
 num_guppy_bins = 20
 num_wall_rays = 20
 input_dim = num_guppy_bins + num_wall_rays + 2
@@ -20,8 +20,8 @@ output_dim = num_angle_bins + num_speed_bins
 
 
 # network
-output_model = "multi_modal"
-#output_model = "fixed"
+#output_model = "multi_modal"
+output_model = "fixed"
 num_layers = 2
 hidden_layer_size = 200
 batch_size = 4

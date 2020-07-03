@@ -1,5 +1,4 @@
 import torch.nn as nn
-from view_hdf import vec_to_angle
 from hyper_params import *
 
 loss_function = nn.MSELoss()
@@ -22,12 +21,11 @@ class LSTM_fixed(nn.Module):
         out = self.linear(x)
         return out, (h, c)
 
-    def predict(self, test_ex, label):
+    def predict(self, test_ex, hc):
         # not ready
-        x, (h, c) = self.lstm(test_ex, self.hidden_state)
+        x, (h, c) = self.lstm(test_ex, hc)
         out = self.linear(x)
-        loss = loss_function(out, label)
-        print(loss.item())
+        return out, (h, c)
 
     def init_hidden(self, batch_size, num_layers):
         ''' Initializes hidden state '''
@@ -66,9 +64,12 @@ class LSTM_multi_modal(nn.Module):
     def predict(self, test_ex, label):
         # not ready
         x, (h, c) = self.lstm(test_ex, self.hidden_state)
-        out = self.linear(x)
-        loss = loss_function(out, label)
-        print(loss.item())
+        angle_out = self.linear1(x)
+        speed_out = self.linear2(x)
+        m = nn.Softmax(dim = 2)
+        angle_pred = m(angle_out)
+        speed_pred = m(speed_out)
+
 
     def init_hidden(self, batch_size, num_layers):
         ''' Initializes hidden state '''
@@ -77,7 +78,6 @@ class LSTM_multi_modal(nn.Module):
                 weight.new(num_layers, batch_size, self.hidden_layer_size).zero_())
 
     def simulate(self, initial_pose, initial_loc_sensory, frames):
-        pos = initial_pose[0], initial_pose[1]
-        ori = vec_to_angle(initial_pose[2], initial_pose[3])
+        pass
 
         # for i in range(frames):

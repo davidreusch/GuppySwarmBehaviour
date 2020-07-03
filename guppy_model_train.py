@@ -20,8 +20,8 @@ torch.manual_seed(1)
 trainpath = "guppy_data/live_female_female/train/" if live_data else "guppy_data/couzin_torus/train/"
 files = [join(trainpath, f) for f in listdir(trainpath) if isfile(join(trainpath, f)) and f.endswith(".hdf5")]
 files.sort()
-num_files = len(files)
-files = files[:num_files]
+num_files = len(files) - 3
+files = files[num_files:]
 print(files)
 
 torch.set_default_dtype(torch.float64)
@@ -39,12 +39,11 @@ else:
 optimizer = torch.optim.Adam(model.parameters(), lr=0.0005)
 print(model)
 # training
-epochs = 100
-network_path = "guppy_net_live.pth" if live_data else "guppy_net.pth"
 
 dataset = Guppy_Dataset(files, 0, num_guppy_bins, num_wall_rays, livedata=live_data, output_model=output_model)
 dataloader = DataLoader(dataset, batch_size=batch_size, drop_last=True, shuffle=True)
 
+epochs = 30
 for i in range(epochs):
     h = model.init_hidden(batch_size, num_layers)
     for inputs, targets in dataloader:
@@ -75,6 +74,7 @@ for i in range(epochs):
 
     print(f'epoch: {i:3} loss: {loss.item():10.10f}')
 
+network_path = "guppy_net_live.pth" if live_data else "guppy_net.pth"
 torch.save(model.state_dict(), network_path)
 
 

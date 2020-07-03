@@ -10,6 +10,8 @@ from time import perf_counter
 from torch.utils.data import Dataset, DataLoader
 from hyper_params import *
 import os
+from guppy_model import LSTM_fixed, LSTM_multi_modal
+import torch
 
 
 # Whole code is inspired by Moritz Maxeiners master thesis and his code for the thesis
@@ -25,6 +27,18 @@ def vec_to_angle(x, y):
 
         return -acos(x)
 
+
+def vec_add(u, v):
+    res = []
+    for i in range(len(u)):
+        res.append(u[i] + v[i])
+    return res
+
+def scalar_mul(scalar, v):
+    res = []
+    for i in range(len(v)):
+        res.append(scalar * v[i])
+    return res
 
 max_dist = 70
 
@@ -217,6 +231,54 @@ class Guppy_Calculator():
             sensory.append(self.craft_vector(i, agent))
         return numpy.array(loc), numpy.array(sensory)
 
+    def network_simulation(self):
+        torch.set_default_dtype(torch.float64)
+        PATH = "guppy_net.pth"
+        model = LSTM_fixed()
+        model.load_state_dict(torch.load(PATH))
+        model.eval()
+        hidden_state = [model.init_hidden(1,num_layers) for agent in range(self.num_guppys)]
+        for i in range(1, len(self.agent_data) - 1):
+            for agent in range(self.num_guppys):
+                with torch.no_grad():
+                    #get input data for this frame
+                    sensory = self.craft_vector(i, agent)
+                    data = torch.from_numpy(numpy.concatenate((self.loc_vec, sensory)))
+                    data = data.view(1, 1, -1)
+
+                    #predict the new ang_turn, lin_speed
+                    out, hidden_state[agent] = model.predict(data, hidden_state[agent])
+                    ang_turn = out[0][0][0].item()
+                    lin_speed = out[0][0][1].item()
+
+
+                    # rotate agent position by angle calculated by network
+                    cos_a = cos(ang_turn)
+                    sin_a = sin(ang_turn)
+                    agent_pos = self.data[agent][i][0], self.data[agent][i][1]
+                    agent_ori = self.data[agent][i][2], self.data[agent][i][3]
+                    new_ori = [cos_a * agent_ori[0] - sin_a * agent_ori[1], \
+                              sin_a * agent_ori[0] + cos_a * agent_ori[1]]
+                    # normally the rotation of a normalized vector by a normalized vector should again be a
+                    # normalized vector, but it seems there are some numerical errors, so normalize the orientation
+                    # again
+                    if new_ori[0] > 1: new_ori[0] = 1
+                    if new_ori[0] < -1: new_ori[0] = -1
+                    if new_ori[1] > 1: new_ori[1] = 1
+                    if new_ori[1] < -1: new_ori[1] = -1
+
+                    # multiply new orientation by linear speed and add to old position
+                    translation_vec = scalar_mul(lin_speed, new_ori)
+                    new_pos = vec_add(agent_pos, translation_vec)
+
+                    #update the position for the next timestep
+                    self.data[agent][i+1][0], self.data[agent][i+1][1] = new_pos
+                    self.data[agent][i+1][2], self.data[agent][i+1][3] = new_ori
+
+            self.plot_guppy_bins(bins=False)
+
+
+
     def get_min_max_angle_speed(self):
         angle, speed = self.get_loc_vec(1)
         min_angle = max_angle = angle
@@ -246,6 +308,7 @@ class Guppy_Calculator():
     def craft_vector(self, i, agent):
         """calculate the vector v = (locomotion, agent_view, wall_view) from the raw data"""
         # get position of guppy 0 and convert it to sympy point
+        self.agent_data = self.data[agent]
         self.obs_pos = (self.agent_data[i][0], self.agent_data[i][1])
         # get orientation vector
         self.obs_ori = (self.agent_data[i][2], self.agent_data[i][3])
@@ -278,7 +341,7 @@ class Guppy_Calculator():
 
     def run_sim(self, step):
         for frame in range(1, len(self.agent_data), step):
-            self.craft_vector(frame)
+            self.craft_vector(frame, self.agent)
             self.dist_difference = dist_travelled(self.agent_data[frame - 1], self.agent_data[frame])
             self.plot_guppy_bins()
             # self.plot_wall_rays() #use either of the two plot_functions, not both at once
@@ -353,7 +416,7 @@ class Guppy_Calculator():
             self.agent_view[i] = intensity_linear(self.agent_view[i], max_dist)
         """
 
-    def plot_guppy_bins(self):
+    def plot_guppy_bins(self, bins=True):
         self.ax.cla()  # clear axes
 
         # plot tank
@@ -364,10 +427,11 @@ class Guppy_Calculator():
         self.ax.add_patch(patch)
 
         # plot bins
-        for i, p in enumerate(self.bins):
-            patch = PolygonPatch(p, facecolor=BLACK, edgecolor=YELLOW,
-                                 alpha=(1 - self.agent_view[i]), zorder=1)
-            self.ax.add_patch(patch)
+        if bins:
+            for i, p in enumerate(self.bins):
+                patch = PolygonPatch(p, facecolor=BLACK, edgecolor=YELLOW,
+                                     alpha=(1 - self.agent_view[i]), zorder=1)
+                self.ax.add_patch(patch)
 
         # plot fishes
         self.ax.plot(self.obs_pos[0], self.obs_pos[1], "go")  # self
@@ -379,7 +443,7 @@ class Guppy_Calculator():
         self.ax.text(110, 90, 'o_vector: ({:.2f},{:.2f})'.format(self.obs_ori[0], self.obs_ori[1]))
         self.ax.text(110, 80, 'angular turn: {:.10f}'.format(self.loc_vec[0]))
         self.ax.text(110, 70, 'linear speed: {:.10f}'.format(self.loc_vec[1]))
-        self.ax.text(110, 60, 'dist travelled: {:.10f}'.format(self.dist_difference))
+        #self.ax.text(110, 60, 'dist travelled: {:.10f}'.format(self.dist_difference))
 
         pyplot.show(block=False)
         pyplot.pause(0.00000000000001)
@@ -462,5 +526,9 @@ class Guppy_Dataset(Dataset):
 if __name__ == "__main__":
     filepath = "guppy_data/couzin_torus/train/8_0002.hdf5"
     filepathlive = "guppy_data/live_female_female/train/CameraCapture2019-06-28T15_40_01_9052-sub_3.hdf5"
-    gc = Guppy_Calculator(filepathlive, agent=0, num_guppy_bins=20, num_wall_rays=5, livedata=True, simulation=True)
-    gc.run_sim(step=1)
+    gc = Guppy_Calculator(filepath, agent=0,
+                          num_guppy_bins=num_guppy_bins,
+                          num_wall_rays=num_wall_rays,
+                          livedata=False, simulation=True)
+    gc.network_simulation()
+    #gc.run_sim(step=1)

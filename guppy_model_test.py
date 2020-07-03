@@ -13,10 +13,9 @@ model = LSTM_fixed()
 model.load_state_dict(torch.load(PATH))
 model.eval()
 
-batch_size = 4
-mypath = "guppy_data/couzin_torus/test/"
-files = [join(mypath, f) for f in listdir(mypath) if
-         isfile(join(mypath, f))]
+testpath = "guppy_data/live_female_female/test/" if live_data else "guppy_data/couzin_torus/test/"
+files = [join(testpath, f) for f in listdir(testpath) if
+         isfile(join(testpath, f)) and f.endswith(".hdf5")]
 files.sort()
 num_files = len(files)
 files = files[:num_files]
