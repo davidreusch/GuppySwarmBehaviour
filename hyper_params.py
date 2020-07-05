@@ -24,4 +24,4 @@ output_dim = num_angle_bins + num_speed_bins
 output_model = "fixed"
 num_layers = 2
 hidden_layer_size = 200
-batch_size = 4
+batch_size = 8

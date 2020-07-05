@@ -15,6 +15,7 @@ class LSTM_fixed(nn.Module):
         self.lstm = nn.LSTM(input_size, hidden_layer_size, num_layers, batch_first=True)
         # predict the two components
         self.linear = nn.Linear(hidden_layer_size, 2)
+        self.hidden_state = None
 
     def forward(self, x, hc):
         x, (h, c) = self.lstm(x, hc)
@@ -35,7 +36,6 @@ class LSTM_fixed(nn.Module):
 
     def simulate(self, initial_pose, initial_loc_sensory, frames):
         pos = initial_pose[0], initial_pose[1]
-        ori = vec_to_angle(initial_pose[2], initial_pose[3])
 
         # for i in range(frames):
 

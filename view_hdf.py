@@ -2,6 +2,7 @@ import h5py
 import numpy
 from math import *
 from matplotlib import pyplot
+from matplotlib import patches
 from shapely.geometry import Polygon as ShapelyPolygon
 import shapely
 from descartes.patch import PolygonPatch
@@ -27,6 +28,13 @@ def vec_to_angle(x, y):
 
         return -acos(x)
 
+
+def rad_to_deg360(a):
+    #if a < 0:
+    #    a = 2 * pi - a
+
+    a %= 2 * pi
+    return (a * 360) / (2 * pi)
 
 def vec_add(u, v):
     res = []
@@ -226,12 +234,14 @@ class Guppy_Calculator():
             sensory.append(self.craft_vector(i, agent))
         return numpy.array(loc), numpy.array(sensory)
 
+
     def network_simulation(self):
         torch.set_default_dtype(torch.float64)
         PATH = "guppy_net.pth"
         model = LSTM_fixed()
         model.load_state_dict(torch.load(PATH))
         model.eval()
+        #TODO hidden state auch mit dem Netzwerk speichern?
         hidden_state = [model.init_hidden(1,num_layers) for agent in range(self.num_guppys)]
         for i in range(1, len(self.agent_data) - 1):
             for agent in range(self.num_guppys):
@@ -428,9 +438,18 @@ class Guppy_Calculator():
                 self.ax.add_patch(patch)
 
         # plot fishes
-        self.ax.plot(self.obs_pos[0], self.obs_pos[1], "go")  # self
+        #self.ax.plot(self.obs_pos[0], self.obs_pos[1], "go")  # self
+
+        ellipse = patches.Ellipse((self.obs_pos[0], self.obs_pos[1]), 2, 7, rad_to_deg360(self.obs_angle - pi / 2))
+        self.ax.add_patch(ellipse)
+
         for i in range(len(self.others)):
-            self.ax.plot([self.others[i][0]], [self.others[i][1]], "r.")  # others
+            position = (self.others[i][0], self.others[i][1])
+            print(self.others_angle[i])
+
+            ellipse = patches.Ellipse(position, 2, 7, rad_to_deg360(self.others_angle[i] - pi / 2))
+            self.ax.add_patch(ellipse)
+            #self.ax.plot([self.others[i][0]], [self.others[i][1]], "r.")  # others
 
         # plot legend
         self.ax.text(110, 100, 'angle: {:.2f}°'.format(degrees(self.obs_angle)))
