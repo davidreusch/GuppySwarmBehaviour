@@ -69,6 +69,7 @@ class LSTM_multi_modal(nn.Module):
         m = nn.Softmax(dim = 2)
         angle_pred = m(angle_out)
         speed_pred = m(speed_out)
+        return None
 
 
     def init_hidden(self, batch_size, num_layers):

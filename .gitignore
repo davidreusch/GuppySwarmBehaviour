@@ -1,8 +1,4 @@
 # Project exclude paths
 /venv/
 /tutorial_data/
-test_torch.py
-pytorch_tutorial_network.py
-pytorch_tutorial_test.py
-pytorch_tutorial_train.py
-morpheus_tutorial.py
+legacy.py
