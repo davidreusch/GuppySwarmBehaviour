@@ -3,7 +3,7 @@ from math import pi
 include_others_angles = True
 live_data = True
 
-agent_view_field = pi #+ pi / 2
+agent_view_field = pi + pi / 2
 far_plane = 140
 num_guppy_bins = 20
 num_wall_rays = 20
