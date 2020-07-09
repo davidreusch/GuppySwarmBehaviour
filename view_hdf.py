@@ -1,3 +1,6 @@
+from os import listdir
+from os.path import join, isfile
+
 import h5py
 import numpy
 from math import *
@@ -30,11 +33,12 @@ def vec_to_angle(x, y):
 
 
 def rad_to_deg360(a):
-    #if a < 0:
+    # if a < 0:
     #    a = 2 * pi - a
 
     a %= 2 * pi
     return (a * 360) / (2 * pi)
+
 
 def vec_add(u, v):
     res = []
@@ -42,11 +46,13 @@ def vec_add(u, v):
         res.append(u[i] + v[i])
     return res
 
+
 def scalar_mul(scalar, v):
     res = []
     for i in range(len(v)):
         res.append(scalar * v[i])
     return res
+
 
 max_dist = 70
 
@@ -116,11 +122,14 @@ def ray_intersection(x, a):
     # lambda * sin(a) + x2 = mu * w2 + b2
     # x = (x.x, x.y)
     x = list(x)
-    x[0] = abs(x[0])
-    x[1] = abs(x[1])
+
+    # make sure positions are within tank walls
+    x[0] = 0 if x[0] < 0 else x[0]
+    x[1] = 0 if x[1] < 0 else x[1]
     x[0] = 100 if x[0] > 100 else x[0]
     x[1] = 100 if x[1] > 100 else x[1]
-    a = a % (2*pi)
+
+    a = a % (2 * pi)
     c = cos(a)
     s = sin(a)
     # if we have a case where cos or sin are close to 0, we can immediately return some value
@@ -130,18 +139,15 @@ def ray_intersection(x, a):
             return x[0], 100
         else:
             return x[0], 0
-    #elif abs(a) < 0.0001:
     elif abs(s) < 0.0001:
         if abs(a) < 0.9:
-        # print('edge case: angle very small')
             return 100, x[1]
-    #elif abs(abs(a) - pi) < 0.0001:
         else:
-        # print('edge case: angle almost 180')
             return 0, x[1]
 
     # else we iterate through the lines which represent the tank walls
     # and search the intersection point with the line given by position and orientation-angle of the agent
+    # there has to be exactly one intersection point within the tank walls in the direction of the ray
     for w, b in tank_walls:
         lambd = 0
         if w[0] == 0:
@@ -149,6 +155,7 @@ def ray_intersection(x, a):
         elif w[1] == 0:
             lambd = (b[1] - x[1]) / s
 
+        # we want the intersection in the direction of the ray, so lambda has to be bigger than 0
         if lambd >= 0:
             inters = round(lambd * c + x[0], 6), round(lambd * s + x[1], 6)
             if is_in_tank(inters[0], inters[1]):
@@ -171,6 +178,7 @@ def get_bin(value, min, max, num_bins):
     bin = floor(value / step) + 1
     return bin
 
+
 def normalize_ori(ori):
     if ori[0] > 1: ori[0] = 1
     if ori[0] < -1: ori[0] = -1
@@ -178,13 +186,13 @@ def normalize_ori(ori):
     if ori[1] < -1: ori[1] = -1
     return ori
 
+
 def normalize_pos(pos):
     if pos[0] < 0: pos[0] = 0
     if pos[1] < 0: pos[1] = 0
     if pos[0] > 100: pos[0] = 100
     if pos[1] > 100: pos[1] = 100
     return pos
-
 
 
 # thats the main class, its run method will do all the work
@@ -215,15 +223,6 @@ class Guppy_Calculator():
             self.ax.set_title('tank')
             set_limits(self.ax, 0, 100, 0, 100)
 
-        # data to be calculated
-        self.agent_view = None
-        self.wall_view = None
-        self.obs_pos = None
-        self.obs_ori = None
-        self.obs_angle = None
-        self.others = None
-        self.loc_vec = None
-
     def get_data(self, agent):
         self.agent_data = self.data[agent]
         self.length = len(self.agent_data)
@@ -234,28 +233,30 @@ class Guppy_Calculator():
             sensory.append(self.craft_vector(i, agent))
         return numpy.array(loc), numpy.array(sensory)
 
-
     def network_simulation(self):
+        # load model
         torch.set_default_dtype(torch.float64)
-        PATH = "guppy_net.pth"
+        path = network_path
+        state_dict = torch.load(path)
+        hidden_layer_size = state_dict["lstm.weight_hh_l0"][1]
         model = LSTM_fixed()
-        model.load_state_dict(torch.load(PATH))
+        model.load_state_dict(state_dict)
         model.eval()
-        #TODO hidden state auch mit dem Netzwerk speichern?
-        hidden_state = [model.init_hidden(1,num_layers) for agent in range(self.num_guppys)]
+
+        # init hidden
+        hidden_state = [model.init_hidden(1, num_layers) for agent in range(self.num_guppys)]
         for i in range(1, len(self.agent_data) - 1):
             for agent in range(self.num_guppys):
                 with torch.no_grad():
-                    #get input data for this frame
+                    # get input data for this frame
                     sensory = self.craft_vector(i, agent)
                     data = torch.from_numpy(numpy.concatenate((self.loc_vec, sensory)))
                     data = data.view(1, 1, -1)
 
-                    #predict the new ang_turn, lin_speed
+                    # predict the new ang_turn, lin_speed
                     out, hidden_state[agent] = model.predict(data, hidden_state[agent])
                     ang_turn = out[0][0][0].item()
                     lin_speed = out[0][0][1].item()
-
 
                     # rotate agent position by angle calculated by network
                     cos_a = cos(ang_turn)
@@ -263,7 +264,7 @@ class Guppy_Calculator():
                     agent_pos = self.data[agent][i][0], self.data[agent][i][1]
                     agent_ori = self.data[agent][i][2], self.data[agent][i][3]
                     new_ori = [cos_a * agent_ori[0] - sin_a * agent_ori[1], \
-                              sin_a * agent_ori[0] + cos_a * agent_ori[1]]
+                               sin_a * agent_ori[0] + cos_a * agent_ori[1]]
                     # normally the rotation of a normalized vector by a normalized vector should again be a
                     # normalized vector, but it seems there are some numerical errors, so normalize the orientation
                     # again
@@ -275,14 +276,14 @@ class Guppy_Calculator():
                     # network does not learn the tank walls properly sometimes, let fish bump against the wall
                     normalize_pos(new_pos)
 
-                    #update the position for the next timestep
-                    self.data[agent][i+1][0], self.data[agent][i+1][1] = new_pos
-                    self.data[agent][i+1][2], self.data[agent][i+1][3] = new_ori
+                    # update the position for the next timestep
+                    self.data[agent][i + 1][0], self.data[agent][i + 1][1] = new_pos
+                    self.data[agent][i + 1][2], self.data[agent][i + 1][3] = new_ori
 
             self.plot_guppy_bins(bins=False)
 
-
-
+    # for estimating the bin boundaries, we want know no the maximum and minimum angular turn and linear speed
+    # that occurred for this file
     def get_min_max_angle_speed(self):
         angle, speed = self.get_loc_vec(1)
         min_angle = max_angle = angle
@@ -295,22 +296,9 @@ class Guppy_Calculator():
             max_speed = speed if speed > max_speed else max_speed
         return min_angle, max_angle, min_speed, max_speed
 
-    def preprocess(self):
-        new_path = self.filepath + ".npy"
-        input = numpy.zeros((len(self.agent_data), 2 + self.num_bins + self.num_rays))
-        start = perf_counter()
-        for i in range(1, len(self.agent_data)):
-            input[i] = self.craft_vector(i)
-        end = perf_counter()
-        elapsed = end - start
-        numpy.save(new_path, input)
-
-        print("Preprocessing took ", elapsed)
-        # for i in numpy.load(new_path):
-        #    print(i)
-
     def craft_vector(self, i, agent):
-        """calculate the vector v = (locomotion, agent_view, wall_view) from the raw data"""
+        """calculate the vector v = (locomotion, agent_view, wall_view) from the raw data
+        for the given agent at given frame"""
         # get position of guppy 0 and convert it to sympy point
         self.agent_data = self.data[agent]
         self.obs_pos = (self.agent_data[i][0], self.agent_data[i][1])
@@ -340,9 +328,11 @@ class Guppy_Calculator():
             return numpy.concatenate((numpy.array(self.agent_view),
                                       numpy.array(self.wall_view)))
 
+    # get the locomotion vector for frame i
     def get_loc_vec(self, i):
         return numpy.array(get_locomotion_vec(self.agent_data[i - 1], self.agent_data[i]))
 
+    # visualize trajectories and bins for a whole file
     def run_sim(self, step):
         for frame in range(1, len(self.agent_data), step):
             self.craft_vector(frame, self.agent)
@@ -351,12 +341,8 @@ class Guppy_Calculator():
             # self.plot_wall_rays() #use either of the two plot_functions, not both at once
 
     def guppy_distances(self):
-        # get the boundaries of the bins by dividing 180 degree field of view by number of bins
-        # and make a ray for each resulting angle. To adjust the rays to our angle-system, we have to subtract pi / 2
-
         # get the intersection points of the rays with the tank walls
         intersections = [ray_intersection(self.obs_pos, angle + self.obs_angle) for angle in self.bin_angles]
-
         # construct the bins as polygons with intersection points and observer position as vertices
         # would surely be more efficient to just use a function which checks if a point lies within a polygon defined
         # by the three / four points given.
@@ -397,67 +383,33 @@ class Guppy_Calculator():
             self.agent_view[i] = intensity_linear(self.agent_view[i])
         # agent_view vector is ready now
 
-        """
-        Variant 3: Start with bins but dont delete guppys, so you can just use two for_loops
-        for i in range(len(self.bins)):
-            for j in range(len(self.others)):
-                distance = dist(self.obs_pos, others_c[j])
-                if distance < self.agent_view[i] \
-                        and self.bins[i].contains(shapely.geometry.Point(others_c[j][0], others_c[j][1])):
-                    self.agent_view[i] = distance
-            self.agent_view[i] = intensity_linear(self.agent_view[i])
-        """
-        """
-        Variant 2: start the loop with the guppys and break if you found its bin
-        for guppy in self.others:
-            for i in range(len(self.bins)):
-                if self.bins[i].encloses_point(guppy):
-                    distance = float(self.obs_pos.distance(guppy))
-                    if distance < self.agent_view[i]:
-                        self.agent_view[i] = distance
-                    break
-        for i in range(len(self.agent_view)):
-            self.agent_view[i] = intensity_linear(self.agent_view[i], max_dist)
-        """
-
     def plot_guppy_bins(self, bins=True):
         self.ax.cla()  # clear axes
-
         # plot tank
         ext = [(0, 0), (0, 100), (100, 100), (100, 0)]
         polygon = shapely.geometry.Polygon(ext)
         plot_coords(self.ax, polygon.exterior)
         patch = PolygonPatch(polygon, facecolor=BLUE, edgecolor=BLACK, alpha=0.6, zorder=1)
         self.ax.add_patch(patch)
-
         # plot bins
         if bins:
             for i, p in enumerate(self.bins):
                 patch = PolygonPatch(p, facecolor=BLACK, edgecolor=YELLOW,
                                      alpha=(1 - self.agent_view[i]), zorder=1)
                 self.ax.add_patch(patch)
-
         # plot fishes
-        #self.ax.plot(self.obs_pos[0], self.obs_pos[1], "go")  # self
-
         ellipse = patches.Ellipse((self.obs_pos[0], self.obs_pos[1]), 2, 7, rad_to_deg360(self.obs_angle - pi / 2))
         self.ax.add_patch(ellipse)
-
         for i in range(len(self.others)):
             position = (self.others[i][0], self.others[i][1])
-            print(self.others_angle[i])
-
             ellipse = patches.Ellipse(position, 2, 7, rad_to_deg360(self.others_angle[i] - pi / 2))
             self.ax.add_patch(ellipse)
-            #self.ax.plot([self.others[i][0]], [self.others[i][1]], "r.")  # others
-
         # plot legend
         self.ax.text(110, 100, 'angle: {:.2f}°'.format(degrees(self.obs_angle)))
         self.ax.text(110, 90, 'o_vector: ({:.2f},{:.2f})'.format(self.obs_ori[0], self.obs_ori[1]))
         self.ax.text(110, 80, 'angular turn: {:.10f}'.format(self.loc_vec[0]))
         self.ax.text(110, 70, 'linear speed: {:.10f}'.format(self.loc_vec[1]))
-        #self.ax.text(110, 60, 'dist travelled: {:.10f}'.format(self.dist_difference))
-
+        # self.ax.text(110, 60, 'dist travelled: {:.10f}'.format(self.dist_difference))
         pyplot.show(block=False)
         pyplot.pause(0.00000000000001)
 
@@ -475,7 +427,6 @@ class Guppy_Calculator():
         plot_coords(self.ax, polygon.exterior)
         patch = PolygonPatch(polygon, facecolor=BLUE, edgecolor=BLACK, alpha=0.6, zorder=1)
         self.ax.add_patch(patch)
-
         # plot rays
         self.ax.plot(self.obs_pos[0], self.obs_pos[1], "ro")
         # uncomment line for intersections in wall_distances
@@ -487,26 +438,27 @@ class Guppy_Calculator():
 
 
 class Guppy_Dataset(Dataset):
-
     def __init__(self, filepaths, agent, num_bins, num_rays, livedata, output_model):
         self.livedata = livedata
         self.num_rays = num_rays
         self.num_view_bins = num_bins
         self.agent = agent
-        #self.length = len(filepaths)
+        # self.length = len(filepaths)
         self.length = 0
         self.filepaths = filepaths
         self.data = []
         self.datapaths = []
         self.labelpaths = []
 
+        # preprocess data for each file given by filepaths
         for i in range(len(filepaths)):
             datapath = self.filepaths[i]
-            datapath += "data.multi_modal" if output_model == "multi_modal" else "data.fixed"
             labelpath = self.filepaths[i]
-            labelpath += "label.multi_modal" if output_model == "multi_modal" else "label.fixed"
+            datapath += "data.{}".format(output_model)
+            labelpath += "label.{}".format(output_model)
             gc = Guppy_Calculator(self.filepaths[i], self.agent, self.num_view_bins, self.num_rays, self.livedata)
             self.length += gc.num_guppys
+            # get processed data from the perspective of guppy of a file
             for agent in range(gc.num_guppys):
                 final_data_path = datapath + "ag" + str(agent) + ".npy"
                 final_label_path = labelpath + "ag" + str(agent) + ".npy"
@@ -522,9 +474,6 @@ class Guppy_Dataset(Dataset):
                 self.datapaths.append(final_data_path)
                 self.labelpaths.append(final_label_path)
 
-        #    self.data.append((numpy.concatenate((x_loc[:-1, :], x_sensory[:-1, :]), 1), y_loc[:-1, :]))
-
-
     def __len__(self):
         return self.length
 
@@ -533,15 +482,19 @@ class Guppy_Dataset(Dataset):
         labels = numpy.load(self.labelpaths[i])
         return data, labels
 
-        # return self.data[i]
-
 
 if __name__ == "__main__":
+    trainpath = "guppy_data/live_female_female/train/" if live_data else "guppy_data/couzin_torus/train/"
+    files = [join(trainpath, f) for f in listdir(trainpath) if isfile(join(trainpath, f)) and f.endswith(".hdf5")]
+    files.sort()
+    num_files = len(files)
+    files = files[:num_files]
+    print(files)
     filepath = "guppy_data/couzin_torus/train/8_0002.hdf5"
     filepathlive = "guppy_data/live_female_female/train/CameraCapture2019-06-28T15_40_01_9052-sub_3.hdf5"
-    gc = Guppy_Calculator(filepath, agent=0,
+    gc = Guppy_Calculator(filepathlive, agent=0,
                           num_guppy_bins=num_guppy_bins,
                           num_wall_rays=num_wall_rays,
-                          livedata=False, simulation=True)
-    gc.network_simulation()
-    #gc.run_sim(step=1)
+                          livedata=live_data, simulation=True)
+    # gc.network_simulation()
+    gc.run_sim(step=1)

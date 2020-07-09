@@ -11,7 +11,7 @@ agent = 0
 
 # for multimodal
 num_angle_bins = 40
-num_speed_bins = 40  # take only 2 bins for the speed data which is constant in the simulated data
+num_speed_bins = 40  
 angle_min = -2
 angle_max = 2
 speed_min = -0.8
@@ -20,8 +20,11 @@ output_dim = num_angle_bins + num_speed_bins
 
 
 # network
-#output_model = "multi_modal"
-output_model = "fixed"
-num_layers = 2
-hidden_layer_size = 200
-batch_size = 8
+output_model = "multi_modal"
+#output_model = "fixed"
+num_layers = 1
+hidden_layer_size = 400
+batch_size = 4
+network_path = "guppy_net_{}_{}_hidden{}_layers{}_gbins{}_wbins{}.pth".format("live" if live_data else "sim",
+                                                              output_model, hidden_layer_size, num_layers,
+                                                                              num_guppy_bins, num_wall_rays)

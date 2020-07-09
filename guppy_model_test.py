@@ -8,9 +8,8 @@ from view_hdf import Guppy_Dataset
 from torch.utils.data import Dataset, DataLoader
 from hyper_params import *
 torch.set_default_dtype(torch.float64)
-PATH = "guppy_net.pth"
 model = LSTM_fixed()
-model.load_state_dict(torch.load(PATH))
+model.load_state_dict(torch.load(network_path))
 model.eval()
 
 testpath = "guppy_data/live_female_female/test/" if live_data else "guppy_data/couzin_torus/test/"
