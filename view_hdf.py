@@ -16,79 +16,13 @@ from hyper_params import *
 import os
 from guppy_model import LSTM_fixed, LSTM_multi_modal
 import torch
+from auxiliary_funcs import *
 
 
 # Whole code is inspired by Moritz Maxeiners master thesis and his code for the thesis
 
 
-# some simple helper functions
-
-# convert a unit-vector giving the orientation to its angle to the x-axis (in radians)
-def vec_to_angle(x, y):
-    if y >= 0:
-        return acos(x)
-    else:
-
-        return -acos(x)
-
-
-def rad_to_deg360(a):
-    # if a < 0:
-    #    a = 2 * pi - a
-
-    a %= 2 * pi
-    return (a * 360) / (2 * pi)
-
-
-def vec_add(u, v):
-    res = []
-    for i in range(len(u)):
-        res.append(u[i] + v[i])
-    return res
-
-
-def scalar_mul(scalar, v):
-    res = []
-    for i in range(len(v)):
-        res.append(scalar * v[i])
-    return res
-
-
-
-
-def ang_diff(source, target):
-    a = target - source
-    a = a - 2 * pi if a > pi else (a + 2 * pi if a < -pi else a)
-    return a
-
-
-# map distance to value in range(0,1) - greater distance -> lesser intensity (from Moritz Maxeiner)
-def intensity_linear(distance):
-    if distance < 0 or far_plane < distance:
-        return 0
-    return 1 - float(distance) / far_plane
-
-
-def intensity_angular(ang_diff):
-    return 1 - float(ang_diff) / pi
-
-
-def addCorner(p1, p2):
-    x = p2[0] if 0 < p1[0] < 100 else p1[0]
-    y = p2[1] if 0 < p1[1] < 100 else p1[1]
-    return x, y
-
-
-def dist(p, q):
-    return sqrt((p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2)
-
-
-def dot_product(vec1, vec2):
-    akk = 0
-    for i in range(len(vec1)):
-        akk += vec1[i] * vec2[i]
-    return akk
-
+# some helper functions
 
 def get_locomotion_vec(data_prev, data_cur):
     if data_prev is None:
@@ -166,18 +100,6 @@ def ray_intersection(x, a):
     return -1, -1
 
 
-def get_bin(value, min, max, num_bins):
-    if value < min:
-        return 0
-    elif value > max:
-        return num_bins - 1
-    value = value - min
-    max = max - min
-    step = max / (num_bins - 2)
-    bin = floor(value / step) + 1
-    return bin
-
-
 def normalize_ori(ori):
     if ori[0] > 1: ori[0] = 1
     if ori[0] < -1: ori[0] = -1
@@ -239,10 +161,10 @@ class Guppy_Calculator():
     def network_simulation(self):
         # load model
         torch.set_default_dtype(torch.float64)
-        path = network_path
+        path = "guppy_net_live_multi_modal_hidden400_layers1_gbins20_wbins20.pth" #network_path
         state_dict = torch.load(path)
         hidden_layer_size = state_dict["lstm.weight_hh_l0"][1]
-        model = LSTM_fixed()
+        model = LSTM_multi_modal() if output_model == "multi_modal" else LSTM_fixed()
         model.load_state_dict(state_dict)
         model.eval()
 
@@ -258,8 +180,8 @@ class Guppy_Calculator():
 
                     # predict the new ang_turn, lin_speed
                     out, hidden_state[agent] = model.predict(data, hidden_state[agent])
-                    ang_turn = out[0][0][0].item()
-                    lin_speed = out[0][0][1].item()
+                    ang_turn = out[0].item() if output_model == "multi_modal" else out[0][0][0].item()
+                    lin_speed = out[1].item() if output_model == "multi_modal" else out[0][0][1].item()
 
                     # rotate agent position by angle calculated by network
                     cos_a = cos(ang_turn)
@@ -472,8 +394,8 @@ class Guppy_Dataset(Dataset):
                     y_loc = numpy.roll(x_loc, -1, 0)
                     if output_model == ("multi_modal"):
                         for i in range(y_loc.shape[0]):
-                            y_loc[i, 0] = get_bin(y_loc[i, 0], angle_min, angle_max, num_angle_bins)
-                            y_loc[i, 1] = get_bin(y_loc[i, 1], speed_min, speed_max, num_speed_bins)
+                            y_loc[i, 0] = value_to_bin(y_loc[i, 0], angle_min, angle_max, num_angle_bins)
+                            y_loc[i, 1] = value_to_bin(y_loc[i, 1], speed_min, speed_max, num_speed_bins)
                     numpy.save(final_data_path, numpy.concatenate((x_loc[:-1, :], x_sensory[:-1, :]), 1))
                     numpy.save(final_label_path, y_loc[:-1, :])
                 self.datapaths.append(final_data_path)
@@ -501,5 +423,5 @@ if __name__ == "__main__":
                           num_guppy_bins=num_guppy_bins,
                           num_wall_rays=num_wall_rays,
                           livedata=live_data, simulation=True)
-    # gc.network_simulation()
-    gc.run_sim(step=1)
+    gc.network_simulation()
+    #gc.run_sim(step=1)

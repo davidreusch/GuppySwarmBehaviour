@@ -3,10 +3,10 @@ from math import pi
 include_others_angles = True
 live_data = True
 
-agent_view_field = pi + pi / 2
+agent_view_field = pi #+ pi / 2
 far_plane = 140
-num_guppy_bins = 40
-num_wall_rays = 40
+num_guppy_bins = 20
+num_wall_rays = 20
 input_dim = num_guppy_bins + num_wall_rays + 2
 input_dim += num_guppy_bins if include_others_angles else 0
 agent = 0
@@ -23,8 +23,8 @@ output_dim = num_angle_bins + num_speed_bins
 
 
 # network
-#output_model = "multi_modal"
-output_model = "fixed"
+output_model = "multi_modal"
+#output_model = "fixed"
 num_layers = 1
 hidden_layer_size = 400
 batch_size = 4

@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-from view_hdf import get_locomotion_vec, Guppy_Calculator, Guppy_Dataset, get_bin
+from view_hdf import get_locomotion_vec, Guppy_Calculator, Guppy_Dataset, value_to_bin
 from os import listdir
 from os.path import isfile, join
 from torch.utils.data import Dataset, DataLoader
@@ -44,6 +44,6 @@ print("Max_Speed:", max_speed)
 
 
 
-print(get_bin(-0.6, -0.4, 0.4, 10))
-print(get_bin(0.1, -0.4, 0.4, 10))
-print(get_bin(0.39, -0.4, 0.4, 10))
+print(value_to_bin(-0.6, -0.4, 0.4, 10))
+print(value_to_bin(0.1, -0.4, 0.4, 10))
+print(value_to_bin(0.39, -0.4, 0.4, 10))
