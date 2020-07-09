@@ -1,9 +1,9 @@
 from math import pi
 # data
 include_others_angles = True
-live_data = False
-num_guppy_bins = 20
-num_wall_rays = 20
+live_data = True
+num_guppy_bins = 40
+num_wall_rays = 40
 input_dim = num_guppy_bins + num_wall_rays + 2
 input_dim += num_guppy_bins if include_others_angles else 0
 agent = 0
