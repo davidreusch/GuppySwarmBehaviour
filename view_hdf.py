@@ -54,7 +54,6 @@ def scalar_mul(scalar, v):
     return res
 
 
-max_dist = 70
 
 
 def ang_diff(source, target):
@@ -65,9 +64,9 @@ def ang_diff(source, target):
 
 # map distance to value in range(0,1) - greater distance -> lesser intensity (from Moritz Maxeiner)
 def intensity_linear(distance):
-    if distance < 0 or max_dist < distance:
+    if distance < 0 or far_plane < distance:
         return 0
-    return 1 - float(distance) / max_dist
+    return 1 - float(distance) / far_plane
 
 
 def intensity_angular(ang_diff):
@@ -215,8 +214,12 @@ class Guppy_Calculator():
 
         self.num_bins = num_guppy_bins
         self.num_rays = num_wall_rays
-        self.bin_angles = [pi * (i / self.num_bins) - pi / 2 for i in range(0, self.num_bins + 1)]
-        self.wall_angles = [pi * (i / self.num_rays) - pi / 2 for i in range(0, self.num_rays)]
+        self.bin_angles = [agent_view_field * (i / self.num_bins) - (agent_view_field - pi) / 2 - pi / 2
+                           for i in range(0, self.num_bins + 1)]
+        #self.bin_angles = [pi * (i / self.num_bins) - pi / 2 for i in range(0, self.num_bins + 1)]
+        self.wall_angles = [agent_view_field * (i / self.num_rays) - (agent_view_field - pi) / 2 - pi / 2
+                            for i in range(0, self.num_rays)]
+        #self.wall_angles = [pi * (i / self.num_rays) - pi / 2 for i in range(0, self.num_rays)]
         self.simulation = simulation
         if simulation:
             self.fig, self.ax = pyplot.subplots()
@@ -454,8 +457,10 @@ class Guppy_Dataset(Dataset):
         for i in range(len(filepaths)):
             datapath = self.filepaths[i]
             labelpath = self.filepaths[i]
-            datapath += "data.{}".format(output_model)
-            labelpath += "label.{}".format(output_model)
+            datapath += "data.{}".format(output_model, num_bins, num_rays)
+            labelpath += "label.{}".format(output_model, num_bins, num_rays)
+            #datapath += "_data_{}_gbins{}_wbins{}".format(output_model, num_bins, num_rays)
+            #labelpath += "_label_{}_gbins{}_wbins{}".format(output_model, num_bins, num_rays)
             gc = Guppy_Calculator(self.filepaths[i], self.agent, self.num_view_bins, self.num_rays, self.livedata)
             self.length += gc.num_guppys
             # get processed data from the perspective of guppy of a file
