@@ -16,16 +16,14 @@ def value_to_bin(value, min, max, num_bins):
 
 def angle_bin_to_value(bin, min, max, num_bins, precision):
     if bin == 0:
-        rge = (torch.tensor([-pi]), min)
+        rge = (torch.tensor([min - 0.2]), min)
     elif bin == num_bins - 1:
-        rge = (torch.tensor([max]), pi)
+        rge = (torch.tensor([max]), max + 0.2)
     else:
         bin -= 1
-        width = max - min
-        step = width / (num_bins - 2)
+        step = (max - min) / (num_bins - 2)
         minim = min + step * bin
-        maxim = minim + step
-        rge = (minim, maxim)
+        rge = (minim, minim + step)
     num_prec_steps = floor((rge[1] - rge[0]) / precision)
     return rge[0] + precision * random.randint(0, num_prec_steps)
 
@@ -36,11 +34,9 @@ def speed_bin_to_value(bin, min, max, num_bins, precision):
         rge = (torch.tensor([max]), max + 0.2)
     else:
         bin -= 1
-        width = max - min
-        step = width / (num_bins - 2)
+        step = (max - min) / (num_bins - 2)
         minim = min + step * bin
-        maxim = minim + step
-        rge = (minim, maxim)
+        rge = (minim, minim + step)
     num_prec_steps = floor((rge[1] - rge[0]) / precision)
     return rge[0] + precision * random.randint(0, num_prec_steps)
 
@@ -49,14 +45,10 @@ def vec_to_angle(x, y):
     if y >= 0:
         return acos(x)
     else:
-
         return -acos(x)
 
 
 def rad_to_deg360(a):
-    # if a < 0:
-    #    a = 2 * pi - a
-
     a %= 2 * pi
     return (a * 360) / (2 * pi)
 
@@ -73,8 +65,6 @@ def scalar_mul(scalar, v):
     for i in range(len(v)):
         res.append(scalar * v[i])
     return res
-
-
 
 
 def ang_diff(source, target):

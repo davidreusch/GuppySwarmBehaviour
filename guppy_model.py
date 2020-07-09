@@ -15,7 +15,7 @@ class LSTM_fixed(nn.Module):
         # output size has to be the number of bins for first loc vec component + for the second
         super().__init__()
         self.hidden_layer_size = hidden_layer_size
-        self.lstm = nn.LSTM(input_size, hidden_layer_size, num_layers, batch_first=True)
+        self.lstm = nn.LSTM(input_size, hidden_layer_size, num_layers, batch_first=True, dropout=0.1)
         # predict the two components
         self.linear = nn.Linear(hidden_layer_size, 2)
         self.hidden_state = None
@@ -48,7 +48,7 @@ class LSTM_multi_modal(nn.Module):
         super().__init__()
         self.hidden_layer_size = hidden_layer_size
 
-        self.lstm = nn.LSTM(input_size, hidden_layer_size, num_layers, batch_first=True)
+        self.lstm = nn.LSTM(input_size, hidden_layer_size, num_layers, batch_first=True, dropout=0.1)
 
         self.linear1 = nn.Linear(hidden_layer_size, num_angle_bins)
         self.linear2 = nn.Linear(hidden_layer_size, num_speed_bins)
@@ -71,10 +71,14 @@ class LSTM_multi_modal(nn.Module):
         angle_out = angle_out.view(num_angle_bins)
         speed_out = speed_out.view(num_speed_bins)
         m = nn.Softmax(0)
-        angle_bin = Categorical(m(angle_out)).sample()
-        speed_bin = Categorical(m(speed_out)).sample()
-        angle_value = angle_bin_to_value(angle_bin, angle_min, angle_max, num_angle_bins, 0.01)
-        speed_value = speed_bin_to_value(speed_bin, speed_min, speed_max, num_speed_bins, 0.01)
+        angle_prob = m(angle_out)
+        speed_prob = m(speed_out)
+        print(angle_prob)
+        print(speed_prob)
+        angle_bin = Categorical(angle_prob).sample()
+        speed_bin = Categorical(speed_prob).sample()
+        angle_value = angle_bin_to_value(angle_bin, angle_min, angle_max, num_angle_bins, 0.001)
+        speed_value = speed_bin_to_value(speed_bin, speed_min, speed_max, num_speed_bins, 0.001)
         return (angle_value, speed_value), (h, c)
 
     def init_hidden(self, batch_size, num_layers):
