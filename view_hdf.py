@@ -379,10 +379,10 @@ class Guppy_Dataset(Dataset):
         for i in range(len(filepaths)):
             datapath = self.filepaths[i]
             labelpath = self.filepaths[i]
-            #datapath += "data.{}".format(output_model, num_bins, num_rays)
-            #labelpath += "label.{}".format(output_model, num_bins, num_rays)
-            datapath += "_data_{}_gbins{}_wbins{}_view{}".format(output_model, num_bins, num_rays, agent_view_field)
-            labelpath += "_label_{}_gbins{}_wbins{}_view{}".format(output_model, num_bins, num_rays, agent_view_field)
+            datapath += "data.{}".format(output_model)
+            labelpath += "label.{}".format(output_model)
+            #datapath += "_data_{}_gbins{}_wbins{}_view{}".format(output_model, num_bins, num_rays, agent_view_field)
+            #labelpath += "_label_{}_gbins{}_wbins{}_view{}".format(output_model, num_bins, num_rays, agent_view_field)
             gc = Guppy_Calculator(self.filepaths[i], self.agent, self.num_view_bins, self.num_rays, self.livedata)
             self.length += gc.num_guppys
             # get processed data from the perspective of guppy of a file

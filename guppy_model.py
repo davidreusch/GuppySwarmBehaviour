@@ -22,11 +22,15 @@ class LSTM_fixed(nn.Module):
 
     def forward(self, x, hc):
         x, (h, c) = self.lstm(x, hc)
+        m = nn.LayerNorm(x.size()[1:])
+        x = m(x)
         out = self.linear(x)
         return out, (h, c)
 
     def predict(self, x, hc):
         x, (h, c) = self.lstm(x, hc)
+        m = nn.LayerNorm(x.size()[1:])
+        x = m(x)
         out = self.linear(x)
         return out, (h, c)
 
@@ -53,18 +57,19 @@ class LSTM_multi_modal(nn.Module):
         self.linear1 = nn.Linear(hidden_layer_size, num_angle_bins)
         self.linear2 = nn.Linear(hidden_layer_size, num_speed_bins)
 
-        # predict the two components
         self.hidden_state = self.init_hidden(batch_size, num_layers)
 
     def forward(self, x, hc):
         x, (h, c) = self.lstm(x, hc)
+        m = nn.LayerNorm(x.size()[1:])
+        x = m(x)
         angle_out = self.linear1(x)
         speed_out = self.linear2(x)
         return angle_out, speed_out, (h, c)
 
 
     def predict(self, x, hc):
-        # not ready
+        # works only with batchsize = sequencesize = 1
         x, (h, c) = self.lstm(x, hc)
         angle_out = self.linear1(x)
         speed_out = self.linear2(x)
