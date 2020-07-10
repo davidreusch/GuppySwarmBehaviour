@@ -161,7 +161,7 @@ class Guppy_Calculator():
     def network_simulation(self):
         # load model
         torch.set_default_dtype(torch.float64)
-        path = "guppy_net_live_multi_modal_hidden400_layers1_gbins20_wbins20.pth" #network_path
+        path = "guppy_net_sim_fixed_hidden100_layers2_gbins20_wbins20.pth" #network_path
         state_dict = torch.load(path)
         hidden_layer_size = state_dict["lstm.weight_hh_l0"][1]
         model = LSTM_multi_modal() if output_model == "multi_modal" else LSTM_fixed()
@@ -379,10 +379,10 @@ class Guppy_Dataset(Dataset):
         for i in range(len(filepaths)):
             datapath = self.filepaths[i]
             labelpath = self.filepaths[i]
-            datapath += "data.{}".format(output_model)
-            labelpath += "label.{}".format(output_model)
-            #datapath += "_data_{}_gbins{}_wbins{}_view{}".format(output_model, num_bins, num_rays, agent_view_field)
-            #labelpath += "_label_{}_gbins{}_wbins{}_view{}".format(output_model, num_bins, num_rays, agent_view_field)
+            #datapath += "data.{}".format(output_model)
+            #labelpath += "label.{}".format(output_model)
+            datapath += f"_data_{output_model}_gbins{num_bins}_wbins{num_rays}_view{agent_view_field}"
+            labelpath += f"_label_{output_model}_gbins{num_bins}_wbins{num_rays}_view{agent_view_field}"
             gc = Guppy_Calculator(self.filepaths[i], self.agent, self.num_view_bins, self.num_rays, self.livedata)
             self.length += gc.num_guppys
             # get processed data from the perspective of guppy of a file
@@ -419,7 +419,7 @@ if __name__ == "__main__":
     print(files)
     filepath = "guppy_data/couzin_torus/train/8_0002.hdf5"
     filepathlive = "guppy_data/live_female_female/train/CameraCapture2019-06-28T15_40_01_9052-sub_3.hdf5"
-    gc = Guppy_Calculator(filepathlive, agent=0,
+    gc = Guppy_Calculator(filepath, agent=0,
                           num_guppy_bins=num_guppy_bins,
                           num_wall_rays=num_wall_rays,
                           livedata=live_data, simulation=True)

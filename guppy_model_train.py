@@ -47,27 +47,34 @@ epochs = 100
 for i in range(epochs):
     h = model.init_hidden(batch_size, num_layers)
     for inputs, targets in dataloader:
-        # Creating new variables for the hidden state, otherwise
-        # we'd backprop through the entire training history
-        model.zero_grad()
-        h = tuple([each.data for each in h])
 
-        if output_model == "multi_modal":
-            targets = targets.type(torch.LongTensor)
-            angle_pred, speed_pred, h = model.forward(inputs, h)
-            angle_pred = angle_pred.view(angle_pred.shape[0] * angle_pred.shape[1], -1)
-            speed_pred = speed_pred.view(speed_pred.shape[0] * speed_pred.shape[1], -1)
-            targets = targets.view(targets.shape[0] * targets.shape[1], 2)
-            angle_targets = targets[:, 0]
-            speed_targets = targets[:, 1]
+        try:
+            # Creating new variables for the hidden state, otherwise
+            # we'd backprop through the entire training history
+            model.zero_grad()
+            h = tuple([each.data for each in h])
 
-            loss1 = loss_function(angle_pred, angle_targets)
-            loss2 = loss_function(speed_pred, speed_targets)
-            loss = loss1 + loss2
+            if output_model == "multi_modal":
+                targets = targets.type(torch.LongTensor)
+                angle_pred, speed_pred, h = model.forward(inputs, h)
+                angle_pred = angle_pred.view(angle_pred.shape[0] * angle_pred.shape[1], -1)
+                speed_pred = speed_pred.view(speed_pred.shape[0] * speed_pred.shape[1], -1)
+                targets = targets.view(targets.shape[0] * targets.shape[1], 2)
+                angle_targets = targets[:, 0]
+                speed_targets = targets[:, 1]
 
-        else:
-            prediction, h = model.forward(inputs, h)
-            loss = loss_function(prediction, targets)
+                loss1 = loss_function(angle_pred, angle_targets)
+                loss2 = loss_function(speed_pred, speed_targets)
+                loss = loss1 + loss2
+
+            else:
+                prediction, h = model.forward(inputs, h)
+                loss = loss_function(prediction, targets)
+
+        except KeyboardInterrupt:
+            if input("Do you want to save the model trained so far? y/n") == "y":
+                torch.save(model.state_dict(), network_path + f".epochs{i}")
+            sys.exit(0)
 
         loss.backward()
         optimizer.step()
