@@ -57,16 +57,17 @@ class LSTM_multi_modal(nn.Module):
         self.linear1 = nn.Linear(hidden_layer_size, num_angle_bins)
         self.linear2 = nn.Linear(hidden_layer_size, num_speed_bins)
 
-        #self.hidden_state = self.init_hidden(batch_size, num_layers)
+        # self.hidden_state = self.init_hidden(batch_size, num_layers)
 
-
-
-        self.bottom_dis_layer = nn.LSTM(input_size, hidden_layer_size, 1, batch_first=True)
+        # self.bottom_dis_layer = nn.LSTM(input_size, hidden_layer_size, 1, batch_first=True)
         self.dis_layers = [nn.LSTM(hidden_layer_size, hidden_layer_size, 1, batch_first=True)
                            for _ in range(num_layers - 1)]
+        self.dis_layers.insert(0, nn.LSTM(input_size, hidden_layer_size, 1, batch_first=True))
+
         self.top_gen_layer = nn.LSTM(hidden_layer_size, hidden_layer_size, 1, batch_first=True)
         self.gen_layers = [nn.LSTM(hidden_layer_size * 2, hidden_layer_size, 1, batch_first=True)
                            for _ in range(num_layers - 1)]
+        self.gen_layers.append(self.top_gen_layer)
 
     def forward_old(self, x, hc):
         x, (h, c) = self.lstm(x, hc)
@@ -77,13 +78,13 @@ class LSTM_multi_modal(nn.Module):
         return angle_out, speed_out, (h, c)
 
     # from Moritz Maxeiner, eyolfsdottirs method
-    def forward(self,  x, states):
+    def forward(self, x, states):
         dis_states, gen_states = states[: num_layers], states[num_layers:][::-1]
 
         # discriminative network applies the lstm layers and saves the results
         # and hidden state
-        layer_results = [self.bottom_dis_layer(x, dis_states[0])]
-        for l in range(len(self.dis_layers)):
+        layer_results = [self.dis_layers[0](x, dis_states[0])]
+        for l in range(1, num_layers):
             layer_results.append(
                 self.dis_layers[l](
                     layer_results[-1][0], dis_states[l]
@@ -91,7 +92,7 @@ class LSTM_multi_modal(nn.Module):
             )
 
         # don't need this here but maybe later
-        #dis_out = (layer_results[-1][0] + 1.0) / 2.0
+        # dis_out = (layer_results[-1][0] + 1.0) / 2.0
 
         # generative network gets as input its the previous input plus an input from the discriminative layer
         layer_results.append(self.top_gen_layer(layer_results[-1][0], gen_states[num_layers - 1]))
@@ -103,12 +104,12 @@ class LSTM_multi_modal(nn.Module):
                 )
             )
 
-        #transform the output into bins
+        # transform the output into bins
         gen_out = layer_results[-1][0]
         angle_out = self.linear1(gen_out)
         speed_out = self.linear2(gen_out)
 
-        #get the whole hidden state history
+        # get the whole hidden state history
         next_states = [results[1] for results in layer_results]
         return angle_out, speed_out, next_states
 
@@ -117,9 +118,13 @@ class LSTM_multi_modal(nn.Module):
         angle_out, speed_out, states = self.forward(x, states)
         angle_out = angle_out.view(num_angle_bins)
         speed_out = speed_out.view(num_speed_bins)
+        print("-----------RAW SCORES------------")
+        print(angle_out)
+        print(speed_out)
         m = nn.Softmax(0)
         angle_prob = m(angle_out)
         speed_prob = m(speed_out)
+        print("---------------SOFTMAX PROBABILITIES ---------------")
         print(angle_prob)
         print(speed_prob)
         angle_bin = Categorical(angle_prob).sample()

@@ -21,7 +21,7 @@ trainpath = "guppy_data/live_female_female/train/" if live_data else "guppy_data
 files = [join(trainpath, f) for f in listdir(trainpath) if isfile(join(trainpath, f)) and f.endswith(".hdf5") ]
 files.sort()
 num_files = len(files) // 8
-files =  files[-4:]
+files = files[-6:]
 print(files)
 
 torch.set_default_dtype(torch.float64)
@@ -36,7 +36,7 @@ else:
     model = LSTM_fixed()
     loss_function = nn.MSELoss()
 
-optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.1)
 print(model)
 # training
 
@@ -45,14 +45,15 @@ dataloader = DataLoader(dataset, batch_size=batch_size, drop_last=True, shuffle=
 
 epochs = 20
 for i in range(epochs):
-    #h = model.init_hidden(batch_size, num_layers, hidden_layer_size)
+    h = model.init_hidden(batch_size, num_layers, hidden_layer_size)
     states = [model.init_hidden(batch_size, 1, hidden_layer_size) for _ in range(num_layers * 2)]
-    for inputs, targets in dataloader:
-        try:
+    try:
+        loss = 0
+        for inputs, targets in dataloader:
             # Creating new variables for the hidden state, otherwise
             # we'd backprop through the entire training history
             model.zero_grad()
-            h = tuple([each.data for each in h])
+            #h = tuple([each.data for each in h])
             states = [tuple([each.data for each in s]) for s in states]
 
             if output_model == "multi_modal":
@@ -68,22 +69,23 @@ for i in range(epochs):
 
                 loss1 = loss_function(angle_pred, angle_targets)
                 loss2 = loss_function(speed_pred, speed_targets)
-                loss = loss1 + loss2
+                loss += loss1 + loss2
 
             else:
                 prediction, h = model.forward(inputs, h)
-                loss = loss_function(prediction, targets)
+                loss += loss_function(prediction, targets)
 
-        except KeyboardInterrupt:
-            if input("Do you want to save the model trained so far? y/n") == "y":
-                torch.save(model.state_dict(), network_path + f".epochs{i}")
-            sys.exit(0)
-
+        loss = loss / dataset.length
         loss.backward()
         optimizer.step()
 
+    except KeyboardInterrupt:
+        if input("Do you want to save the model trained so far? y/n") == "y":
+            torch.save(model.state_dict(), network_path + f".epochs{i}")
+        sys.exit(0)
+
     print(f'epoch: {i:3} loss: {loss.item():10.10f}')
 
-torch.save(model.state_dict(), network_path + f".epochs{i}")
+torch.save(model.state_dict(), network_path + f".epochs{epochs}")
 
 

@@ -1,7 +1,7 @@
 from math import pi
 # data
 include_others_angles = True
-live_data = True
+live_data = False
 
 agent_view_field = round(pi + pi / 2, 2)
 far_plane = 140
@@ -28,6 +28,6 @@ output_model = "multi_modal"
 num_layers = 3
 hidden_layer_size = 100
 batch_size = 4
-network_path = "guppy_net_{}_{}_hidden{}_layers{}_gbins{}_wbins{}.pth".format("live" if live_data else "sim",
+network_path = "saved_networks/guppy_net_{}_{}_hidden{}_layers{}_gbins{}_wbins{}.pth".format("live" if live_data else "sim",
                                                               output_model, hidden_layer_size, num_layers,
                                                                               num_guppy_bins, num_wall_rays)

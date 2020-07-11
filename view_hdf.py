@@ -158,11 +158,10 @@ class Guppy_Calculator():
             sensory.append(self.craft_vector(i, agent))
         return numpy.array(loc), numpy.array(sensory)
 
-    def network_simulation(self):
+    def network_simulation(self, networkpath):
         # load model
         torch.set_default_dtype(torch.float64)
-        path = "guppy_net_live_multi_modal_hidden100_layers3_gbins60_wbins60.pth" #network_path
-        state_dict = torch.load(path)
+        state_dict = torch.load(networkpath)
         hidden_layer_size = state_dict["lstm.weight_hh_l0"][1]
         model = LSTM_multi_modal() if output_model == "multi_modal" else LSTM_fixed()
         model.load_state_dict(state_dict)
@@ -381,8 +380,10 @@ class Guppy_Dataset(Dataset):
 
         # preprocess data for each file given by filepaths
         for i in range(len(filepaths)):
-            datapath = self.filepaths[i]
-            labelpath = self.filepaths[i]
+            trainpath, filename = os.path.split(self.filepaths[i])
+
+            datapath = labelpath = trainpath + "/preprocessed/" + filename
+
             #datapath += "data.{}".format(output_model)
             #labelpath += "label.{}".format(output_model)
             datapath += f"_data_{output_model}_gbins{num_bins}_wbins{num_rays}_view{agent_view_field}"
@@ -423,11 +424,14 @@ if __name__ == "__main__":
     num_files = len(files)
     files = files[:num_files]
     print(files)
-    filepath = "guppy_data/couzin_torus/train/8_0002.hdf5"
-    filepathlive = "guppy_data/live_female_female/train/CameraCapture2019-06-28T15_40_01_9052-sub_3.hdf5"
-    gc = Guppy_Calculator(filepathlive, agent=0,
+    filepath = "guppy_data/live_female_female/train/CameraCapture2019-06-28T15_40_01_9052-sub_3.hdf5" if live_data \
+        else "guppy_data/couzin_torus/train/8_0002.hdf5"
+    gc = Guppy_Calculator(filepath, agent=0,
                           num_guppy_bins=num_guppy_bins,
                           num_wall_rays=num_wall_rays,
                           livedata=live_data, simulation=True)
-    gc.network_simulation()
+
+    path = "saved_networks/guppy_net_sim_multi_modal_hidden100_layers3_gbins60_wbins60.pth.epochs11"  # network_path
+    gc.network_simulation(path)
+
     #gc.run_sim(step=1)
