@@ -20,8 +20,8 @@ torch.manual_seed(1)
 trainpath = "guppy_data/live_female_female/train/" if live_data else "guppy_data/couzin_torus/train/"
 files = [join(trainpath, f) for f in listdir(trainpath) if isfile(join(trainpath, f)) and f.endswith(".hdf5") ]
 files.sort()
-num_files = len(files) // 8
-files =  files[-4:]
+num_files = len(files) 
+files =  files[:num_files]
 print(files)
 
 torch.set_default_dtype(torch.float64)
@@ -43,7 +43,7 @@ print(model)
 dataset = Guppy_Dataset(files, 0, num_guppy_bins, num_wall_rays, livedata=live_data, output_model=output_model)
 dataloader = DataLoader(dataset, batch_size=batch_size, drop_last=True, shuffle=True)
 
-epochs = 20
+epochs = 40
 for i in range(epochs):
     #h = model.init_hidden(batch_size, num_layers, hidden_layer_size)
     states = [model.init_hidden(batch_size, 1, hidden_layer_size) for _ in range(num_layers * 2)]
@@ -52,7 +52,7 @@ for i in range(epochs):
             # Creating new variables for the hidden state, otherwise
             # we'd backprop through the entire training history
             model.zero_grad()
-            h = tuple([each.data for each in h])
+            #h = tuple([each.data for each in h])
             states = [tuple([each.data for each in s]) for s in states]
 
             if output_model == "multi_modal":
