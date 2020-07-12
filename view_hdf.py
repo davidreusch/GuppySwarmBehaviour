@@ -162,7 +162,7 @@ class Guppy_Calculator():
         # load model
         torch.set_default_dtype(torch.float64)
         state_dict = torch.load(networkpath)
-        hidden_layer_size = state_dict["lstm.weight_hh_l0"][1]
+        #hidden_layer_size = state_dict["lstm.weight_hh_l0"][1]
         model = LSTM_multi_modal() if output_model == "multi_modal" else LSTM_fixed()
         model.load_state_dict(state_dict)
         model.eval()
@@ -170,8 +170,8 @@ class Guppy_Calculator():
         # init hidden
         #hidden_state = [model.init_hidden(1, num_layers) for agent in range(self.num_guppys)]
         states = [[model.init_hidden(1, 1, hidden_layer_size)
-                  for _ in range(num_layers * 2)]
-                  for _ in range(self.num_guppys)]
+                  for i in range(num_layers * 2)]
+                  for j in range(self.num_guppys)]
         for i in range(1, len(self.agent_data) - 1):
             for agent in range(self.num_guppys):
                 with torch.no_grad():

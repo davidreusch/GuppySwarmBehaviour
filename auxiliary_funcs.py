@@ -39,7 +39,7 @@ def speed_bin_to_value(bin, min, max, num_bins, precision):
         rge = (minim, minim + step)
     num_prec_steps = floor((rge[1] - rge[0]) / precision)
     return rge[0] + precision * random.randint(0, num_prec_steps)
-
+print(speed_bin_to_value(0, -0.8, 2.8, 80, 0.001))
 
 def vec_to_angle(x, y):
     if y >= 0:
