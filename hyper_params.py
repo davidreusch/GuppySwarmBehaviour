@@ -25,7 +25,7 @@ output_dim = num_angle_bins + num_speed_bins
 # network
 output_model = "multi_modal"
 #output_model = "fixed"
-num_layers = 3
+num_layers = 2
 hidden_layer_size = 100
 batch_size = 4
 network_path = "saved_networks/guppy_net_{}_{}_hidden{}_layers{}_gbins{}_wbins{}.pth".format("live" if live_data else "sim",

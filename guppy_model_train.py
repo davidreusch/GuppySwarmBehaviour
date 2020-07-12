@@ -21,7 +21,7 @@ trainpath = "guppy_data/live_female_female/train/" if live_data else "guppy_data
 files = [join(trainpath, f) for f in listdir(trainpath) if isfile(join(trainpath, f)) and f.endswith(".hdf5") ]
 files.sort()
 num_files = len(files) // 8
-files = files[-12:]
+files = files[-18:]
 print(files)
 
 torch.set_default_dtype(torch.float64)
