@@ -168,7 +168,7 @@ class Guppy_Calculator():
         model.eval()
 
         # init hidden
-        #hidden_state = [model.init_hidden(1, num_layers) for agent in range(self.num_guppys)]
+        hidden_state = [model.init_hidden(1, 2, hidden_layer_size) for agent in range(self.num_guppys)]
         states = [[model.init_hidden(1, 1, hidden_layer_size)
                   for i in range(num_layers * 2)]
                   for j in range(self.num_guppys)]
@@ -181,8 +181,8 @@ class Guppy_Calculator():
                     data = data.view(1, 1, -1)
 
                     # predict the new ang_turn, lin_speed
-                    #out, hidden_state[agent] = model.predict(data, hidden_state[agent])
-                    out, states[agent] = model.predict(data, states[agent])
+                    out, hidden_state[agent] = model.predict(data, hidden_state[agent])
+                    # out, states[agent] = model.predict(data, states[agent])
                     ang_turn = out[0].item() if output_model == "multi_modal" else out[0][0][0].item()
                     lin_speed = out[1].item() if output_model == "multi_modal" else out[0][0][1].item()
 
@@ -386,8 +386,9 @@ class Guppy_Dataset(Dataset):
 
             #datapath += "data.{}".format(output_model)
             #labelpath += "label.{}".format(output_model)
-            datapath += f"_data_{output_model}_gbins{num_bins}_wbins{num_rays}_view{agent_view_field}"
-            labelpath += f"_label_{output_model}_gbins{num_bins}_wbins{num_rays}_view{agent_view_field}"
+            m = "multi_modal"
+            datapath += f"_data_{m}_gbins{num_bins}_wbins{num_rays}_view{agent_view_field}"
+            labelpath += f"_label_{m}_gbins{num_bins}_wbins{num_rays}_view{agent_view_field}"
             gc = Guppy_Calculator(self.filepaths[i], self.agent, self.num_view_bins, self.num_rays, self.livedata)
             self.length += gc.num_guppys
             # get processed data from the perspective of guppy of a file
@@ -431,7 +432,7 @@ if __name__ == "__main__":
                           num_wall_rays=num_wall_rays,
                           livedata=live_data, simulation=True)
 
-    path = "saved_networks/guppy_net_sim_multi_modal_hidden100_layers3_gbins60_wbins60.pth.epochs11"  # network_path
+    path = "saved_networks/guppy_net_sim_fixed_hidden200_layers2_gbins20_wbins20.pth.epochs12"  # network_path
     gc.network_simulation(path)
 
     #gc.run_sim(step=1)

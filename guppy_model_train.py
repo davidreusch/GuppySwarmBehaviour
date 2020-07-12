@@ -21,7 +21,7 @@ trainpath = "guppy_data/live_female_female/train/" if live_data else "guppy_data
 files = [join(trainpath, f) for f in listdir(trainpath) if isfile(join(trainpath, f)) and f.endswith(".hdf5") ]
 files.sort()
 num_files = len(files) // 8
-files = files[-18:]
+files = files[-3:]
 print(files)
 
 torch.set_default_dtype(torch.float64)
@@ -36,7 +36,7 @@ else:
     model = LSTM_fixed()
     loss_function = nn.MSELoss()
 
-optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 print(model)
 # training
 
@@ -47,14 +47,14 @@ epochs = 12
 for i in range(epochs):
     try:
         h = model.init_hidden(batch_size, num_layers, hidden_layer_size)
-        states = [model.init_hidden(batch_size, 1, hidden_layer_size) for _ in range(num_layers * 2)]
+        #states = [model.init_hidden(batch_size, 1, hidden_layer_size) for _ in range(num_layers * 2)]
         loss = 0
         for inputs, targets in dataloader:
             # Creating new variables for the hidden state, otherwise
             # we'd backprop through the entire training history
             model.zero_grad()
-            #h = tuple([each.data for each in h])
-            states = [tuple([each.data for each in s]) for s in states]
+            h = tuple([each.data for each in h])
+            #states = [tuple([each.data for each in s]) for s in states]
 
             if output_model == "multi_modal":
                 targets = targets.type(torch.LongTensor)
@@ -88,6 +88,7 @@ for i in range(epochs):
                 loss += loss1 + loss2
 
             else:
+                #prediction, states = model.forward(inputs, states)
                 prediction, h = model.forward(inputs, h)
                 loss += loss_function(prediction, targets)
 

@@ -14,37 +14,79 @@ class LSTM_fixed(nn.Module):
     def __init__(self, input_size=input_dim, hidden_layer_size=hidden_layer_size):
         # output size has to be the number of bins for first loc vec component + for the second
         super().__init__()
-        self.hidden_layer_size = hidden_layer_size
-        self.lstm = nn.LSTM(input_size, hidden_layer_size, num_layers, batch_first=True, dropout=0.1)
-        # predict the two components
+        self.lstm = nn.LSTM(input_size, hidden_layer_size, num_layers, batch_first=True, dropout=0.01)
+        # # predict the two components
         self.linear = nn.Linear(hidden_layer_size, 2)
-        self.hidden_state = None
+
+        # self.dis_layers = nn.ModuleList([nn.LSTM(hidden_layer_size, hidden_layer_size, 1, batch_first=True )
+        #                                  for _ in range(num_layers - 1)])
+        # self.dis_layers.insert(0, nn.LSTM(input_size, hidden_layer_size, 1, batch_first=True))
+        #
+        # #self.top_gen_layer = nn.LSTM(hidden_layer_size, hidden_layer_size, 1, batch_first=True)
+        # self.gen_layers = nn.ModuleList([nn.LSTM(hidden_layer_size * 2, hidden_layer_size, 1, batch_first=True)
+        #                                  for _ in range(num_layers - 1)])
+        # self.gen_layers.append(nn.LSTM(hidden_layer_size, hidden_layer_size, 1, batch_first=True))
+        #
+        # self.dropout = nn.Dropout(0.2)
 
     def forward(self, x, hc):
         x, (h, c) = self.lstm(x, hc)
-        m = nn.LayerNorm(x.size()[1:])
-        x = m(x)
+        #m = nn.LayerNorm(x.size()[1:])
+        #x = m(x)
         out = self.linear(x)
         return out, (h, c)
+
+    def forward_ey(self, x, states):
+        dis_states, gen_states = states[: num_layers], states[num_layers:][::-1]
+        seq_len = x.size()[1]
+
+        # discriminative network applies the lstm layers and saves the results
+        # and hidden state
+        layer_results = [(self.dis_layers[0](x, dis_states[0]))]
+        for l in range(1, num_layers):
+            layer_results.append(
+                self.dis_layers[l](
+                    self.dropout((layer_results[-1][0])),
+                    dis_states[l]
+                )
+            )
+        # don't need this here but maybe later
+        # dis_out = (layer_results[-1][0] + 1.0) / 2.0
+
+        # generative network gets as input its the previous input plus an input from the discriminative layer
+        top_layer = num_layers - 1
+        layer_results.append(self.gen_layers[top_layer]((layer_results[-1][0]), gen_states[top_layer]))
+        for l in range(top_layer - 1, -1, -1):
+            # next = torch.cat((layer_results[-1][0], layer_results[l][0]), 2)
+            # print(next.size())
+            layer_results.append(
+                self.gen_layers[l](
+                    self.dropout((torch.cat((layer_results[-1][0], layer_results[l][0]), 2))),
+                    gen_states[l]
+                )
+            )
+
+        # transform the output into bins
+        gen_out = layer_results[-1][0]
+        out = self.linear(gen_out)
+
+        # get the whole hidden state history
+        next_states = [results[1] for results in layer_results]
+        return out, next_states
 
     def predict(self, x, hc):
-        x, (h, c) = self.lstm(x, hc)
-        m = nn.LayerNorm(x.size()[1:])
-        x = m(x)
-        out = self.linear(x)
-        return out, (h, c)
 
-    def init_hidden(self, batch_size, num_layers):
+        # x, (h, c) = self.lstm(x, hc)
+        # m = nn.LayerNorm(x.size()[1:])
+        # x = m(x)
+        # out = self.linear(x)
+        return self.forward(x, hc)
+
+    def init_hidden(self, batch_size, num_layers, hidden_layer_size):
         ''' Initializes hidden state '''
         weight = next(self.parameters()).data
-        return (weight.new(num_layers, batch_size, self.hidden_layer_size).zero_(),
-                weight.new(num_layers, batch_size, self.hidden_layer_size).zero_())
-
-    def simulate(self, initial_pose, initial_loc_sensory, frames):
-        pos = initial_pose[0], initial_pose[1]
-
-        # for i in range(frames):
-
+        return (weight.new(num_layers, batch_size, hidden_layer_size).zero_(),
+                weight.new(num_layers, batch_size, hidden_layer_size).zero_())
 
 class LSTM_multi_modal(nn.Module):
     def __init__(self, input_size=input_dim, hidden_layer_size=hidden_layer_size):
