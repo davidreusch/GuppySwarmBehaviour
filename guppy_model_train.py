@@ -20,7 +20,7 @@ torch.manual_seed(1)
 trainpath = "guppy_data/live_female_female/train/" if live_data else "guppy_data/couzin_torus/train/"
 files = [join(trainpath, f) for f in listdir(trainpath) if isfile(join(trainpath, f)) and f.endswith(".hdf5") ]
 files.sort()
-num_files = len(files)  // 2
+num_files = len(files)
 files = files[num_files:]
 print(files)
 
@@ -36,7 +36,7 @@ else:
     model = LSTM_fixed()
     loss_function = nn.MSELoss()
 
-optimizer = torch.optim.Adam(model.parameters(), lr=0.0005)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
 print(model)
 # training
 

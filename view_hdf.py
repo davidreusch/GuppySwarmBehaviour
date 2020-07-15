@@ -416,7 +416,9 @@ class Guppy_Dataset(Dataset):
                         for i in range(y_loc.shape[0]):
                             y_loc[i, 0] = value_to_bin(y_loc[i, 0], angle_min, angle_max, num_angle_bins)
                             y_loc[i, 1] = value_to_bin(y_loc[i, 1], speed_min, speed_max, num_speed_bins)
-                    numpy.save(final_data_path, numpy.concatenate((x_loc[:-1, :], x_sensory[:-1, :]), 1))
+
+                    if not os.path.isfile(final_data_path):
+                        numpy.save(final_data_path, numpy.concatenate((x_loc[:-1, :], x_sensory[:-1, :]), 1))
                     numpy.save(final_label_path, y_loc[:-1, :])
                 self.datapaths.append(final_data_path)
                 self.labelpaths.append(final_label_path)
