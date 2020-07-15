@@ -168,7 +168,7 @@ class Guppy_Calculator():
         model.eval()
 
         # init hidden
-        hidden_state = [model.init_hidden(1, 2, hidden_layer_size) for agent in range(self.num_guppys)]
+        hidden_state = [model.init_hidden(1, num_layers, hidden_layer_size) for agent in range(self.num_guppys)]
         states = [[model.init_hidden(1, 1, hidden_layer_size)
                   for i in range(num_layers * 2)]
                   for j in range(self.num_guppys)]
@@ -181,8 +181,8 @@ class Guppy_Calculator():
                     data = data.view(1, 1, -1)
 
                     # predict the new ang_turn, lin_speed
-                    out, hidden_state[agent] = model.predict(data, hidden_state[agent])
-                    # out, states[agent] = model.predict(data, states[agent])
+                    #out, hidden_state[agent] = model.predict(data, hidden_state[agent])
+                    out, states[agent] = model.predict(data, states[agent])
                     ang_turn = out[0].item() if output_model == "multi_modal" else out[0][0][0].item()
                     lin_speed = out[1].item() if output_model == "multi_modal" else out[0][0][1].item()
 
@@ -326,7 +326,7 @@ class Guppy_Calculator():
                                      alpha=(1 - self.agent_view[i]), zorder=1)
                 self.ax.add_patch(patch)
         # plot fishes
-        ellipse = patches.Ellipse((self.obs_pos[0], self.obs_pos[1]), 2, 7, rad_to_deg360(self.obs_angle - pi / 2))
+        ellipse = patches.Ellipse((self.obs_pos[0], self.obs_pos[1]), 2, 7, rad_to_deg360(self.obs_angle - pi / 2), color=RED)
         self.ax.add_patch(ellipse)
         for i in range(len(self.others)):
             position = (self.others[i][0], self.others[i][1])
@@ -366,7 +366,7 @@ class Guppy_Calculator():
 
 
 class Guppy_Dataset(Dataset):
-    def __init__(self, filepaths, agent, num_bins, num_rays, livedata, output_model):
+    def __init__(self, filepaths, agent, num_bins, num_rays, livedata, output_model, max_agents):
         self.livedata = livedata
         self.num_rays = num_rays
         self.num_view_bins = num_bins
@@ -387,18 +387,30 @@ class Guppy_Dataset(Dataset):
             #datapath += "data.{}".format(output_model)
             #labelpath += "label.{}".format(output_model)
             m = "multi_modal"
-            datapath += f"_data_{m}_gbins{num_bins}_wbins{num_rays}_view{agent_view_field}"
-            labelpath += f"_label_{m}_gbins{num_bins}_wbins{num_rays}_view{agent_view_field}"
+            datapath += f"_data_gbins{num_bins}_wbins{num_rays}_view{agent_view_field}_far_plane{far_plane}"
+            labelpath += f"_label_gbins_{output_model}_{num_bins}_wbins{num_rays}_view{agent_view_field}_far_plane{far_plane}"
             gc = Guppy_Calculator(self.filepaths[i], self.agent, self.num_view_bins, self.num_rays, self.livedata)
-            self.length += gc.num_guppys
+            num_agents = gc.num_guppys if gc.num_guppys < max_agents else max_agents
+            self.length += num_agents
             # get processed data from the perspective of guppy of a file
-            for agent in range(gc.num_guppys):
+            for agent in range(num_agents):
                 final_data_path = datapath + "ag" + str(agent) + ".npy"
                 final_label_path = labelpath + "ag" + str(agent) + ".npy"
-                if not os.path.isfile(final_data_path):
+                if not os.path.isfile(final_label_path):
                     print("creating ", final_data_path)
                     print("creating ", final_label_path)
-                    x_loc, x_sensory = gc.get_data(agent)
+                    if not os.path.isfile(final_data_path):
+                        x_loc, x_sensory = gc.get_data(agent)
+                    else:
+                        x = numpy.load(final_data_path)
+                        x_loc, x_sensory = numpy.split(x, [2], axis=1)
+                        print(x_loc.shape)
+                        print(x_sensory.shape)
+                        x_loc = numpy.append(x_sensory, gc.craft_vector(len(gc.agent_data) - 1, agent))
+                        x_sensory = numpy.append(x_loc, gc.get_loc_vec((len(gc.agent_data) - 1)))
+                        print(x_loc.shape)
+                        print(x_sensory.shape)
+
                     y_loc = numpy.roll(x_loc, -1, 0)
                     if output_model == ("multi_modal"):
                         for i in range(y_loc.shape[0]):
@@ -432,7 +444,7 @@ if __name__ == "__main__":
                           num_wall_rays=num_wall_rays,
                           livedata=live_data, simulation=True)
 
-    path = "saved_networks/guppy_net_sim_fixed_hidden200_layers2_gbins20_wbins20.pth.epochs12"  # network_path
+    path = "saved_networks/guppy_net_sim_fixed_hidden100_layers3_gbins20_wbins20_far_plane140.pth.epochs30"  # network_path
     gc.network_simulation(path)
 
     #gc.run_sim(step=1)
