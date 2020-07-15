@@ -114,7 +114,7 @@ class LSTM_multi_modal(nn.Module):
         # #self.layernorm_gen = nn.LayerNorm(hidden_layer_size * 2)
 
 
-    def forwardold(self, x, hc):
+    def forward(self, x, hc):
         x, (h, c) = self.lstm(x, hc)
         #m = nn.LayerNorm(x.size()[1:])
         #x = m(x)
@@ -123,7 +123,7 @@ class LSTM_multi_modal(nn.Module):
         return angle_out, speed_out, (h, c)
 
     # from Moritz Maxeiner, eyolfsdottirs method
-    def forward(self, x, states):
+    def forwardey(self, x, states):
         dis_states, gen_states = states[: num_layers], states[num_layers:][::-1]
         seq_len = x.size()[1]
 

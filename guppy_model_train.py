@@ -46,20 +46,20 @@ dataloader = DataLoader(dataset, batch_size=batch_size, drop_last=True, shuffle=
 epochs = 30
 for i in range(epochs):
     try:
-        #h = model.init_hidden(batch_size, num_layers, hidden_layer_size)
-        states = [model.init_hidden(batch_size, 1, hidden_layer_size) for _ in range(num_layers * 2)]
+        h = model.init_hidden(batch_size, num_layers, hidden_layer_size)
+        #states = [model.init_hidden(batch_size, 1, hidden_layer_size) for _ in range(num_layers * 2)]
         #loss = 0
         for inputs, targets in dataloader:
             # Creating new variables for the hidden state, otherwise
             # we'd backprop through the entire training history
             optimizer.zero_grad()
-            #h = tuple([each.data for each in h])
-            states = [tuple([each.data for each in s]) for s in states]
+            h = tuple([each.data for each in h])
+            #states = [tuple([each.data for each in s]) for s in states]
 
             if output_model == "multi_modal":
                 targets = targets.type(torch.LongTensor)
-                #angle_pred, speed_pred, h = model.forward(inputs, h)
-                angle_pred, speed_pred, states = model.forward(inputs, states)
+                angle_pred, speed_pred, h = model.forward(inputs, h)
+                #angle_pred, speed_pred, states = model.forward(inputs, states)
                 #print(angle_pred.size())
                 #print(speed_pred.size())
 
@@ -111,8 +111,6 @@ for i in range(epochs):
                 loss = loss_function(prediction, targets)
             #torch.nn.utils.clip_grad_norm_(model.parameters(), 0.25)
             loss.backward()
-
-            #loss = loss / dataset.length
             optimizer.step()
 
     except KeyboardInterrupt:

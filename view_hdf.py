@@ -453,7 +453,7 @@ if __name__ == "__main__":
                           num_wall_rays=num_wall_rays,
                           livedata=live_data, simulation=True)
 
-    path = "saved_networks/guppy_net_sim_multi_modal_hidden100_layers3_gbins60_wbins60_far_plane140.pth.epochs22"  # network_path
+    path = "saved_networks/guppy_net_sim_multi_modal_hidden100_layers3_gbins60_wbins60_far_plane140.pth.epochs17"  # network_path
     gc.network_simulation(path)
 
     #gc.run_sim(step=1)
