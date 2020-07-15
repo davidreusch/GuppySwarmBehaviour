@@ -13,30 +13,30 @@ loss_function = nn.MSELoss()
 class LSTM_fixed(nn.Module):
     def __init__(self, input_size=input_dim, hidden_layer_size=hidden_layer_size):
         super().__init__()
-        #self.lstm = nn.LSTM(input_size, hidden_layer_size, num_layers, batch_first=True)
+        self.lstm = nn.LSTM(input_size, hidden_layer_size, num_layers, batch_first=True)
         # # predict the two components
         self.linear = nn.Linear(hidden_layer_size, 2)
-
-        self.dis_layers = nn.ModuleList([nn.LSTM(hidden_layer_size, hidden_layer_size, 1, batch_first=True )
-                                          for _ in range(num_layers - 1)])
-        self.dis_layers.insert(0, nn.LSTM(input_size, hidden_layer_size, 1, batch_first=True))
-
-        self.gen_layers = nn.ModuleList([nn.LSTM(hidden_layer_size * 2, hidden_layer_size, 1, batch_first=True)
-                                           for _ in range(num_layers - 1)])
-        self.gen_layers.append(nn.LSTM(hidden_layer_size, hidden_layer_size, 1, batch_first=True))
+        #
+        # self.dis_layers = nn.ModuleList([nn.LSTM(hidden_layer_size, hidden_layer_size, 1, batch_first=True )
+        #                                   for _ in range(num_layers - 1)])
+        # self.dis_layers.insert(0, nn.LSTM(input_size, hidden_layer_size, 1, batch_first=True))
+        #
+        # self.gen_layers = nn.ModuleList([nn.LSTM(hidden_layer_size * 2, hidden_layer_size, 1, batch_first=True)
+        #                                    for _ in range(num_layers - 1)])
+        # self.gen_layers.append(nn.LSTM(hidden_layer_size, hidden_layer_size, 1, batch_first=True))
 
         #self.dropout = nn.Dropout(0.2)
         #self.layernorm_dis = nn.LayerNorm(hidden_layer_size)
         #self.layernorm_gen = nn.LayerNorm(hidden_layer_size * 2)
 
-    def forwardold(self, x, hc):
+    def forward(self, x, hc):
         x, (h, c) = self.lstm(x, hc)
         #m = nn.LayerNorm(x.size()[1:])
         #x = m(x)
         out = self.linear(x)
         return out, (h, c)
 
-    def forward(self, x, states):
+    def forwardey(self, x, states):
         dis_states, gen_states = states[: num_layers], states[num_layers:][::-1]
         seq_len = x.size()[1]
 

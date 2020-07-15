@@ -44,16 +44,17 @@ dataset = Guppy_Dataset(files, 0, num_guppy_bins, num_wall_rays, livedata=live_d
 dataloader = DataLoader(dataset, batch_size=batch_size, drop_last=True, shuffle=True)
 
 epochs = 30
+seq_len = 20
 for i in range(epochs):
     try:
-        h = model.init_hidden(batch_size, num_layers, hidden_layer_size)
         #states = [model.init_hidden(batch_size, 1, hidden_layer_size) for _ in range(num_layers * 2)]
+        #h = model.init_hidden(batch_size, num_layers, hidden_layer_size)
         #loss = 0
         for inputs, targets in dataloader:
             # Creating new variables for the hidden state, otherwise
             # we'd backprop through the entire training history
             optimizer.zero_grad()
-            h = tuple([each.data for each in h])
+            #h = tuple([each.data for each in h])
             #states = [tuple([each.data for each in s]) for s in states]
 
             if output_model == "multi_modal":
@@ -106,9 +107,13 @@ for i in range(epochs):
 
 
             else:
-                prediction, states = model.forward(inputs, states)
-                #prediction, h = model.forward(inputs, h)
-                loss = loss_function(prediction, targets)
+                h = model.init_hidden(batch_size, num_layers, hidden_layer_size)
+                for s in range(0, inputs.size()[1] - seq_len, seq_len):
+                    #prediction, states = model.forward(inputs[:, s:seq_len, :], states)
+                    prediction, h = model.forward(inputs[:, s:s + seq_len, :], h)
+                    loss = loss_function(prediction, targets[:, s: s + seq_len, :])
+
+
             #torch.nn.utils.clip_grad_norm_(model.parameters(), 0.25)
             loss.backward()
             optimizer.step()

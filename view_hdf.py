@@ -181,8 +181,8 @@ class Guppy_Calculator():
                     data = data.view(1, 1, -1)
 
                     # predict the new ang_turn, lin_speed
-                    #out, hidden_state[agent] = model.predict(data, hidden_state[agent])
-                    out, states[agent] = model.predict(data, states[agent])
+                    out, hidden_state[agent] = model.predict(data, hidden_state[agent])
+                    #out, states[agent] = model.predict(data, states[agent])
                     ang_turn = out[0].item() if output_model == "multi_modal" else out[0][0][0].item()
                     lin_speed = out[1].item() if output_model == "multi_modal" else out[0][0][1].item()
 
@@ -453,7 +453,7 @@ if __name__ == "__main__":
                           num_wall_rays=num_wall_rays,
                           livedata=live_data, simulation=True)
 
-    path = "saved_networks/guppy_net_sim_multi_modal_hidden100_layers3_gbins60_wbins60_far_plane140.pth.epochs17"  # network_path
+    path = "saved_networks/guppy_net_sim_fixed_hidden200_layers1_gbins60_wbins60_far_plane140.pth.epochs30"  # network_path
     gc.network_simulation(path)
 
     #gc.run_sim(step=1)
