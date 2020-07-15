@@ -94,33 +94,30 @@ class LSTM_multi_modal(nn.Module):
         super().__init__()
         self.hidden_layer_size = hidden_layer_size
 
-        #self.lstm = nn.LSTM(input_size, hidden_layer_size, num_layers, batch_first=True)
+        self.lstm = nn.LSTM(input_size, hidden_layer_size, num_layers, batch_first=True)
 
-        self.linear = nn.Linear(hidden_layer_size, num_angle_bins + num_speed_bins)
+        #self.linear = nn.Linear(hidden_layer_size, num_angle_bins + num_speed_bins)
         self.linear1 = nn.Linear(hidden_layer_size, num_angle_bins)
         self.linear2 = nn.Linear(hidden_layer_size, num_speed_bins)
 
-        # self.hidden_state = self.init_hidden(batch_size, num_layers)
 
-        # self.bottom_dis_layer = nn.LSTM(input_size, hidden_layer_size, 1, batch_first=True)
         self.dis_layers = nn.ModuleList([nn.LSTM(hidden_layer_size, hidden_layer_size, 1, batch_first=True )
                            for _ in range(num_layers - 1)])
         self.dis_layers.insert(0, nn.LSTM(input_size, hidden_layer_size, 1, batch_first=True))
 
-        #self.top_gen_layer = nn.LSTM(hidden_layer_size, hidden_layer_size, 1, batch_first=True)
         self.gen_layers = nn.ModuleList([nn.LSTM(hidden_layer_size * 2, hidden_layer_size, 1, batch_first=True)
-                           for _ in range(num_layers - 1)])
+                            for _ in range(num_layers - 1)])
         self.gen_layers.append(nn.LSTM(hidden_layer_size, hidden_layer_size, 1, batch_first=True))
 
         self.dropout = nn.Dropout(0.2)
         #self.layernorm_dis = nn.LayerNorm(hidden_layer_size)
-        #self.layernorm_gen = nn.LayerNorm(hidden_layer_size * 2)
+        # #self.layernorm_gen = nn.LayerNorm(hidden_layer_size * 2)
 
 
-    def forward_old(self, x, hc):
+    def forwardold(self, x, hc):
         x, (h, c) = self.lstm(x, hc)
-        m = nn.LayerNorm(x.size()[1:])
-        x = m(x)
+        #m = nn.LayerNorm(x.size()[1:])
+        #x = m(x)
         angle_out = self.linear1(x)
         speed_out = self.linear2(x)
         return angle_out, speed_out, (h, c)
@@ -158,14 +155,14 @@ class LSTM_multi_modal(nn.Module):
 
         # transform the output into bins
         gen_out = layer_results[-1][0]
-        out = self.linear(gen_out)
-        #angle_out = self.linear1(gen_out)
-        #speed_out = self.linear2(gen_out)
+        #out = self.linear(gen_out)
+        angle_out = self.linear1(gen_out)
+        speed_out = self.linear2(gen_out)
 
         # get the whole hidden state history
         next_states = [results[1] for results in layer_results]
-        #return angle_out, speed_out, next_states
-        return out, next_states
+        return angle_out, speed_out, next_states
+        #return out, next_states
 
 
     def predict(self, x, states):

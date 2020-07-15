@@ -404,12 +404,19 @@ class Guppy_Dataset(Dataset):
                     else:
                         x = numpy.load(final_data_path)
                         x_loc, x_sensory = numpy.split(x, [2], axis=1)
+                        print(x_sensory.shape)
+                        print(x_loc.shape)
+
+                        x_sensory = numpy.append(x_sensory, gc.craft_vector(len(gc.agent_data) - 1, agent))
+                        x_loc = numpy.append(x_loc, gc.get_loc_vec((len(gc.agent_data) - 1)))
+                        print(x_sensory.shape)
+                        print(x_loc.shape)
+
+                        x_loc = numpy.reshape(x_loc, (-1, 2))
+                        x_sensory = numpy.reshape(x_sensory, (-1, 2 * num_bins + num_rays))
                         print(x_loc.shape)
                         print(x_sensory.shape)
-                        x_loc = numpy.append(x_sensory, gc.craft_vector(len(gc.agent_data) - 1, agent))
-                        x_sensory = numpy.append(x_loc, gc.get_loc_vec((len(gc.agent_data) - 1)))
-                        print(x_loc.shape)
-                        print(x_sensory.shape)
+
 
                     y_loc = numpy.roll(x_loc, -1, 0)
                     if output_model == ("multi_modal"):
@@ -446,7 +453,7 @@ if __name__ == "__main__":
                           num_wall_rays=num_wall_rays,
                           livedata=live_data, simulation=True)
 
-    path = "saved_networks/guppy_net_sim_fixed_hidden100_layers3_gbins20_wbins20_far_plane140.pth.epochs30"  # network_path
+    path = "saved_networks/guppy_net_sim_multi_modal_hidden100_layers3_gbins60_wbins60_far_plane140.pth.epochs22"  # network_path
     gc.network_simulation(path)
 
     #gc.run_sim(step=1)
