@@ -171,7 +171,9 @@ class Guppy_Calculator():
         hidden_state = [model.init_hidden(1, num_layers, hidden_layer_size) for agent in range(self.num_guppys)]
         states = [[model.init_hidden(1, 1, hidden_layer_size)
                   for i in range(num_layers * 2)]
-                  for j in range(self.num_guppys)]
+                  for j in range(self.num_guppys)] if arch == "ey" \
+            else [model.init_hidden(1, num_layers, hidden_layer_size) for agent in range(self.num_guppys)]
+
         for i in range(1, len(self.agent_data) - 1):
             for agent in range(self.num_guppys):
                 with torch.no_grad():
@@ -181,8 +183,8 @@ class Guppy_Calculator():
                     data = data.view(1, 1, -1)
 
                     # predict the new ang_turn, lin_speed
-                    out, hidden_state[agent] = model.predict(data, hidden_state[agent])
-                    #out, states[agent] = model.predict(data, states[agent])
+                    #out, hidden_state[agent] = model.predict(data, hidden_state[agent])
+                    out, states[agent] = model.predict(data, states[agent])
                     ang_turn = out[0].item() if output_model == "multi_modal" else out[0][0][0].item()
                     lin_speed = out[1].item() if output_model == "multi_modal" else out[0][0][1].item()
 

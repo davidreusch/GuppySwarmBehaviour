@@ -13,23 +13,33 @@ loss_function = nn.MSELoss()
 class LSTM_fixed(nn.Module):
     def __init__(self, input_size=input_dim, hidden_layer_size=hidden_layer_size):
         super().__init__()
-        self.lstm = nn.LSTM(input_size, hidden_layer_size, num_layers, batch_first=True)
+
+
         # # predict the two components
         self.linear = nn.Linear(hidden_layer_size, 2)
         #
-        # self.dis_layers = nn.ModuleList([nn.LSTM(hidden_layer_size, hidden_layer_size, 1, batch_first=True )
-        #                                   for _ in range(num_layers - 1)])
-        # self.dis_layers.insert(0, nn.LSTM(input_size, hidden_layer_size, 1, batch_first=True))
-        #
-        # self.gen_layers = nn.ModuleList([nn.LSTM(hidden_layer_size * 2, hidden_layer_size, 1, batch_first=True)
-        #                                    for _ in range(num_layers - 1)])
-        # self.gen_layers.append(nn.LSTM(hidden_layer_size, hidden_layer_size, 1, batch_first=True))
+        if arch != "ey":
+            self.lstm = nn.LSTM(input_size, hidden_layer_size, num_layers, batch_first=True)
+        else:
+            self.dis_layers = nn.ModuleList([nn.LSTM(hidden_layer_size, hidden_layer_size, 1, batch_first=True )
+                                              for _ in range(num_layers - 1)])
+            self.dis_layers.insert(0, nn.LSTM(input_size, hidden_layer_size, 1, batch_first=True))
 
-        #self.dropout = nn.Dropout(0.2)
+            self.gen_layers = nn.ModuleList([nn.LSTM(hidden_layer_size * 2, hidden_layer_size, 1, batch_first=True)
+                                                for _ in range(num_layers - 1)])
+            self.gen_layers.append(nn.LSTM(hidden_layer_size, hidden_layer_size, 1, batch_first=True))
+
+            self.dropout = nn.Dropout(0.2)
         #self.layernorm_dis = nn.LayerNorm(hidden_layer_size)
         #self.layernorm_gen = nn.LayerNorm(hidden_layer_size * 2)
 
-    def forward(self, x, hc):
+    def forward(self, x, hidden):
+        if arch == "ey":
+            return self.forwardey(x, hidden)
+        else:
+            return self.forwardold(x, hidden)
+
+    def forwardold(self, x, hc):
         x, (h, c) = self.lstm(x, hc)
         #m = nn.LayerNorm(x.size()[1:])
         #x = m(x)
@@ -94,27 +104,34 @@ class LSTM_multi_modal(nn.Module):
         super().__init__()
         self.hidden_layer_size = hidden_layer_size
 
-        self.lstm = nn.LSTM(input_size, hidden_layer_size, num_layers, batch_first=True)
 
-        #self.linear = nn.Linear(hidden_layer_size, num_angle_bins + num_speed_bins)
+
+        # #self.linear = nn.Linear(hidden_layer_size, num_angle_bins + num_speed_bins)
         self.linear1 = nn.Linear(hidden_layer_size, num_angle_bins)
         self.linear2 = nn.Linear(hidden_layer_size, num_speed_bins)
 
+        if arch != "ey":
+            self.lstm = nn.LSTM(input_size, hidden_layer_size, num_layers, batch_first=True)
+        else:
+            self.dis_layers = nn.ModuleList([nn.LSTM(hidden_layer_size, hidden_layer_size, 1, batch_first=True )
+                                for _ in range(num_layers - 1)])
+            self.dis_layers.insert(0, nn.LSTM(input_size, hidden_layer_size, 1, batch_first=True))
+            #
+            self.gen_layers = nn.ModuleList([nn.LSTM(hidden_layer_size * 2, hidden_layer_size, 1, batch_first=True)
+                                 for _ in range(num_layers - 1)])
+            self.gen_layers.append(nn.LSTM(hidden_layer_size, hidden_layer_size, 1, batch_first=True))
+            #
+            self.dropout = nn.Dropout(0.2)
+            #self.layernorm_dis = nn.LayerNorm(hidden_layer_size)
+            #self.layernorm_gen = nn.LayerNorm(hidden_layer_size * 2)
 
-        self.dis_layers = nn.ModuleList([nn.LSTM(hidden_layer_size, hidden_layer_size, 1, batch_first=True )
-                           for _ in range(num_layers - 1)])
-        self.dis_layers.insert(0, nn.LSTM(input_size, hidden_layer_size, 1, batch_first=True))
+    def forward(self, x, hidden):
+        if arch == "ey":
+            return self.forwardey(x, hidden)
+        else:
+            return self.forwardold(x, hidden)
 
-        self.gen_layers = nn.ModuleList([nn.LSTM(hidden_layer_size * 2, hidden_layer_size, 1, batch_first=True)
-                            for _ in range(num_layers - 1)])
-        self.gen_layers.append(nn.LSTM(hidden_layer_size, hidden_layer_size, 1, batch_first=True))
-
-        self.dropout = nn.Dropout(0.2)
-        #self.layernorm_dis = nn.LayerNorm(hidden_layer_size)
-        # #self.layernorm_gen = nn.LayerNorm(hidden_layer_size * 2)
-
-
-    def forward(self, x, hc):
+    def forwardold(self, x, hc):
         x, (h, c) = self.lstm(x, hc)
         #m = nn.LayerNorm(x.size()[1:])
         #x = m(x)
