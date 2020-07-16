@@ -60,9 +60,10 @@ for i in range(epochs):
             if output_model == "multi_modal":
                 targets = targets.type(torch.LongTensor)
                 #loss = 0
+                states = [tuple([each.data for each in s]) for s in states] if arch == "ey" else \
+                    tuple([each.data for each in states])
                 for s in range(0, inputs.size()[1] - seq_len, seq_len):
-                    states = [tuple([each.data for each in s]) for s in states] if arch == "ey" else \
-                        tuple([each.data for each in states])
+                    optimizer.zero_grad()
                     angle_pred, speed_pred, states = model.forward(inputs[:, s:s + seq_len, :], states)
 
                     #angle_pred, speed_pred, states = model.forward(inputs[:, s:s + seq_len, :], states)
@@ -75,7 +76,7 @@ for i in range(epochs):
 
                     loss1 = loss_function(angle_pred, angle_targets)
                     loss2 = loss_function(speed_pred, speed_targets)
-                    loss = loss1 + loss2
+                    loss = (loss1 + loss2) / 2
                     loss.backward()
                     optimizer.step()
 
