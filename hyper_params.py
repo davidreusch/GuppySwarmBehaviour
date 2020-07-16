@@ -33,7 +33,7 @@ if arch == "ey":
     batch_size = 4
 else:
     num_layers = 1
-    hidden_layer_size = 200
+    hidden_layer_size = 400
     batch_size = 4
 
 network_path = "saved_networks/guppy_net_{}_{}_hidden{}_layers{}_gbins{}_wbins{}_far_plane{}.pth".format("live" if live_data else "sim",

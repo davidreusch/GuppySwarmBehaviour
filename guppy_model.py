@@ -17,6 +17,7 @@ class LSTM_fixed(nn.Module):
 
         # # predict the two components
         self.linear = nn.Linear(hidden_layer_size, 2)
+        self.dropout = nn.Dropout(0.2)
         #
         if arch != "ey":
             self.lstm = nn.LSTM(input_size, hidden_layer_size, num_layers, batch_first=True)
@@ -29,7 +30,6 @@ class LSTM_fixed(nn.Module):
                                                 for _ in range(num_layers - 1)])
             self.gen_layers.append(nn.LSTM(hidden_layer_size, hidden_layer_size, 1, batch_first=True))
 
-            self.dropout = nn.Dropout(0.2)
         #self.layernorm_dis = nn.LayerNorm(hidden_layer_size)
         #self.layernorm_gen = nn.LayerNorm(hidden_layer_size * 2)
 
@@ -42,7 +42,7 @@ class LSTM_fixed(nn.Module):
     def forwardold(self, x, hc):
         x, (h, c) = self.lstm(x, hc)
         #m = nn.LayerNorm(x.size()[1:])
-        #x = m(x)
+        x = self.dropout(x)
         out = self.linear(x)
         return out, (h, c)
 

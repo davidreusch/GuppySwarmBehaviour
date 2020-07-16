@@ -21,7 +21,7 @@ trainpath = "guppy_data/live_female_female/train/" if live_data else "guppy_data
 files = [join(trainpath, f) for f in listdir(trainpath) if isfile(join(trainpath, f)) and f.endswith(".hdf5") ]
 files.sort()
 num_files = len(files) // 2
-files = files[-30:]
+files = files[-40:]
 print(files)
 
 torch.set_default_dtype(torch.float64)
@@ -36,7 +36,7 @@ else:
     model = LSTM_fixed()
     loss_function = nn.MSELoss()
 
-optimizer = torch.optim.Adam(model.parameters(), lr=0.00005)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
 print(model)
 # training
 
@@ -53,11 +53,10 @@ for i in range(epochs):
         for inputs, targets in dataloader:
             # Creating new variables for the hidden state, otherwise
             # we'd backprop through the entire training history
-            optimizer.zero_grad()
             #states = [tuple([each.data for each in s]) for s in states]
-            states = [model.init_hidden(batch_size, 1, hidden_layer_size) for _ in range(num_layers * 2)] if arch == "ey" \
+            states = [model.init_hidden(batch_size, 1, hidden_layer_size) for _ in
+                      range(num_layers * 2)] if arch == "ey" \
                 else model.init_hidden(batch_size, num_layers, hidden_layer_size)
-
             if output_model == "multi_modal":
                 targets = targets.type(torch.LongTensor)
                 #loss = 0
@@ -91,15 +90,23 @@ for i in range(epochs):
 
             else:
                 #loss = 0
+                #prediction, states = model.forward(inputs, states)
+
                 for s in range(0, inputs.size()[1], seq_len):
-                    #states = [tuple([each.data for each in s]) for s in states] if arch == "ey" else \
-                    #    tuple([each.data for each in states])
+                    optimizer.zero_grad()
+                    states = [tuple([each.data for each in s]) for s in states] if arch == "ey" else \
+                        tuple([each.data for each in states])
                     prediction, states = model.forward(inputs[:, s:s + seq_len, :], states)
                     loss = loss_function(prediction, targets[:, s: s + seq_len, :])
+                    #if s == 0:
+                    #   loss = loss_function(prediction, targets[:, s: s + seq_len, :])
+                    #else:
+                    #   loss += loss_function(prediction, targets[:, s: s + seq_len, :])
+                    loss.backward()
+                    optimizer.step()
 
+                #loss = loss_function(prediction, targets)
                 #loss /= inputs.shape[1] // seq_len
-                loss.backward()
-                optimizer.step()
 
             print("###################################")
             print(f'epoch: {i:3} loss: {loss.item():10.10f}')
