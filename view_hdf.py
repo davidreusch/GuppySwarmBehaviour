@@ -185,15 +185,17 @@ class Guppy_Calculator():
                     # predict the new ang_turn, lin_speed
                     #out, hidden_state[agent] = model.predict(data, hidden_state[agent])
                     out, states[agent] = model.predict(data, states[agent])
-                    ang_turn = out[0].item() if output_model == "multi_modal" else out[0][0][0].item()
-                    lin_speed = out[1].item() if output_model == "multi_modal" else out[0][0][1].item()
+                    #ang_turn = out[0].item() if output_model == "multi_modal" else out[0][0][0].item()
+                    ang_turn = out[0] if output_model == "multi_modal" else out[0][0][0].item()
+                    #lin_speed = out[1].item() if output_model == "multi_modal" else out[0][0][1].item()
+                    lin_speed = out[1] if output_model == "multi_modal" else out[0][0][1].item()
 
                     # rotate agent position by angle calculated by network
                     cos_a = cos(ang_turn)
                     sin_a = sin(ang_turn)
                     agent_pos = self.data[agent][i][0], self.data[agent][i][1]
                     agent_ori = self.data[agent][i][2], self.data[agent][i][3]
-                    new_ori = [cos_a * agent_ori[0] - sin_a * agent_ori[1], \
+                    new_ori = [cos_a * agent_ori[0] - sin_a * agent_ori[1],
                                sin_a * agent_ori[0] + cos_a * agent_ori[1]]
                     # normally the rotation of a normalized vector by a normalized vector should again be a
                     # normalized vector, but it seems there are some numerical errors, so normalize the orientation
@@ -250,7 +252,7 @@ class Guppy_Calculator():
             self.loc_vec = get_locomotion_vec(self.agent_data[i - 1], self.agent_data[i])
 
         # we return the vector already concatenated in a numpy_vector
-        if include_others_angles:
+        if include_others_ori:
             return numpy.concatenate((numpy.array(self.agent_view),
                                       numpy.array(self.wall_view),
                                       numpy.array(self.agent_view_angle)))
@@ -455,7 +457,9 @@ if __name__ == "__main__":
                           num_wall_rays=num_wall_rays,
                           livedata=live_data, simulation=True)
 
-    path = "saved_networks/guppy_net_sim_fixed_hidden400_layers1_gbins60_wbins60_far_plane140.pth.epochs16"  # network_path
+    with open("saved_networks/last_trained_net.txt", "r") as f:
+        path = f.read()
+    print("simulating ", path)
     gc.network_simulation(path)
 
     #gc.run_sim(step=1)
