@@ -2,6 +2,8 @@ from math import floor, pi, acos, sqrt
 import random
 from hyper_params import *
 import torch
+import matplotlib.pyplot as plt
+import pickle
 
 def value_to_bin(value, min, max, num_bins):
     if value < min:
@@ -16,33 +18,40 @@ def value_to_bin(value, min, max, num_bins):
 
 def angle_bin_to_value(bin, min, max, num_bins, precision):
     if bin == 0:
-        rge = (torch.tensor([min - 0.2]), min)
+        #rge = (torch.tensor([min - 0.01]), min)
+        rge = [min - 0.01, min]
+        width = 0.01
     elif bin == num_bins - 1:
-        rge = (torch.tensor([max]), max + 0.2)
+        #rge = (torch.tensor([max]), max + 0.01)
+        rge = [max, max + 0.01]
+        width = 0.01
     else:
         bin -= 1
-        step = (max - min) / (num_bins - 2)
-        minim = min + step * bin
-        rge = (minim, minim + step)
+        width = (max - min) / (num_bins - 2)
+        minbin = min + width * bin
+        rge = (minbin, minbin + width)
     num_prec_steps = floor((rge[1] - rge[0]) / precision)
-    return rge[0] + precision * random.randint(0, num_prec_steps)
+    #return rge[0] + precision * random.randint(0, num_prec_steps)
+    return rge[0] + width / 2
 
-print(angle_bin_to_value(82, angle_min, angle_max, num_angle_bins, 0.000001))
-print(value_to_bin(-0.032, angle_min, angle_max, num_angle_bins))
 def speed_bin_to_value(bin, min, max, num_bins, precision):
     if bin == 0:
-        rge = (torch.tensor([min]) - 0.2, min)
+        #rge = (torch.tensor([min]) - 0.2, min)
+        rge = [min - 0.2, min]
+        step = 0.2
     elif bin == num_bins - 1:
-        rge = (torch.tensor([max]), max + 0.2)
+        #rge = (torch.tensor([max]), max + 0.2)
+        rge = [max, max + 0.2]
+        step = 0.2
     else:
         bin -= 1
         step = (max - min) / (num_bins - 2)
         minim = min + step * bin
         rge = (minim, minim + step)
     num_prec_steps = floor((rge[1] - rge[0]) / precision)
-    return rge[0] + precision * random.randint(0, num_prec_steps)
+    #return rge[0] + precision * random.randint(0, num_prec_steps)
+    return rge[0] + step / 2
 
-print(angle_bin_to_value(25, speed_min, speed_max, num_speed_bins, 0.001))
 def vec_to_angle(x, y):
     if y >= 0:
         return acos(x)
@@ -101,3 +110,37 @@ def dot_product(vec1, vec2):
     for i in range(len(vec1)):
         akk += vec1[i] * vec2[i]
     return akk
+
+def plot_scores(scores, epochs, load_from_file=False, filename=None):
+
+    if load_from_file:
+        with open(filename, 'rb') as f:
+            scores = pickle.load(f)
+
+    n_epochs = range(epochs)
+    train_loss = scores[0]
+    val_loss = scores[1]
+    #confidence_turn = scores[2]
+    #confidence_speed = scores[3]
+    #accuracy_turn = scores[4]
+    #accuracy_speed = scores[5]
+
+    plt.subplot(131)
+    plt.plot(n_epochs, train_loss)
+    plt.plot(n_epochs, val_loss)
+    plt.xlabel('Epochs')
+    plt.ylabel('Error')
+    plt.legend(['train error', 'validation error'])
+    # plt.subplot(132)
+    # plt.plot(n_epochs, confidence_turn)
+    # plt.plot(n_epochs, confidence_speed)
+    # plt.legend(['angular turn', 'linear speed'])
+    # plt.xlabel('Epochs')
+    # plt.ylabel('Confidence')
+    # plt.subplot(133)
+    # plt.plot(n_epochs, accuracy_turn)
+    # plt.plot(n_epochs, accuracy_speed)
+    # plt.legend(['angular turn', 'linear speed'])
+    # plt.xlabel('Epochs')
+    # plt.ylabel('Accuracy')
+    plt.show()

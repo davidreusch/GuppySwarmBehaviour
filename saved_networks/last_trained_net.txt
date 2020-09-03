@@ -1,0 +1,1 @@
+saved_networks/guppy_net_sim_fixed_hidden300_layers2_gbins60_wbins60_far_plane140.pth.epochs15
